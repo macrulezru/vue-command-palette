@@ -68,5 +68,8 @@
     "fuzzy-search",
     "headless"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
