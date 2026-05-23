@@ -11,7 +11,7 @@
     "allowArbitraryExtensions": true,
     "types": ["node"],
     "paths": {
-      "vue-command-palette": ["../src/index.ts"]
+      "@macrulez/vue-command-palette": ["../src/index.ts"]
     }
   },
   "include": ["src/**/*", "vite.config.ts", "env.d.ts"]

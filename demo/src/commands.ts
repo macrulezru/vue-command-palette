@@ -1,4 +1,4 @@
-import type { CommandGroupType } from 'vue-command-palette'
+import type { CommandGroupType } from '@macrulez/vue-command-palette'
 import type { Ref } from 'vue'
 
 export function buildCommands(

@@ -8,4 +8,4 @@ declare module '*.vue' {
 
 // CSS side-effect imports
 declare module '*.css' {}
-declare module 'vue-command-palette/style.css' {}
+declare module '@macrulez/vue-command-palette/style.css' {}

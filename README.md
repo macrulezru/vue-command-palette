@@ -1,4 +1,4 @@
-# vue-command-palette
+# @macrulez/vue-command-palette
 
 Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped commands, nested sub-palettes, global keyboard shortcuts, async search, confirmation dialogs, recent command history, and full headless customisation via slots — all with a single peer dependency (Vue 3).
 
@@ -73,7 +73,7 @@ Opens at **http://localhost:5173**.
 ## Installation
 
 ```bash
-npm install vue-command-palette
+npm install @macrulez/vue-command-palette
 ```
 
 Peer dependency:
@@ -91,14 +91,15 @@ npm install vue@>=3.3
 ```ts
 // main.ts
 import { createApp } from 'vue'
-import { VCommandPalettePlugin } from 'vue-command-palette'
-import 'vue-command-palette/style.css'
+import { VCommandPalettePlugin } from '@macrulez/vue-command-palette'
+import '@macrulez/vue-command-palette/style.css'
 import App from './App.vue'
 
 const app = createApp(App)
 
 app.use(VCommandPalettePlugin, {
   hotkey: ['$mod', 'k'],  // Cmd+K on macOS, Ctrl+K on Windows/Linux
+  colorTheme: 'system',   // 'light' | 'dark' | 'system'
   persistRecent: true,
   maxRecent: 5,
 })
@@ -110,7 +111,7 @@ app.mount('#app')
 
 ```vue
 <script setup lang="ts">
-import { CommandPalette, useRegisterGroup } from 'vue-command-palette'
+import { CommandPalette, useRegisterGroup } from '@macrulez/vue-command-palette'
 
 useRegisterGroup({
   id: 'navigation',
@@ -267,7 +268,7 @@ Renders a group header followed by its `CommandItem` rows. Passes all `#item`, `
 Composable that exposes the global palette state and all control functions. Must be called inside a component tree where `VCommandPalettePlugin` is installed.
 
 ```ts
-import { useCommandPalette } from 'vue-command-palette'
+import { useCommandPalette } from '@macrulez/vue-command-palette'
 
 const {
   isOpen,            // Readonly<Ref<boolean>>
@@ -310,7 +311,7 @@ open('parent-command-id')
 Registers commands when the component mounts and automatically unregisters them when it unmounts. Commands registered this way have no group header.
 
 ```ts
-import { useRegisterCommands } from 'vue-command-palette'
+import { useRegisterCommands } from '@macrulez/vue-command-palette'
 
 // In any component setup()
 useRegisterCommands([
@@ -336,7 +337,7 @@ useRegisterCommands([
 Registers a full command group with a label and priority on mount, unregisters on unmount.
 
 ```ts
-import { useRegisterGroup } from 'vue-command-palette'
+import { useRegisterGroup } from '@macrulez/vue-command-palette'
 
 useRegisterGroup({
   id: 'editor',
@@ -377,6 +378,7 @@ app.use(VCommandPalettePlugin, options)
 | Option | Type | Default | Description |
 |---|---|---|---|
 | `hotkey` | `string[]` | `['$mod', 'k']` | Key combination to toggle the palette |
+| `colorTheme` | `'light' \| 'dark' \| 'system'` | `'system'` | Initial color theme of the palette |
 | `persistRecent` | `boolean` | `true` | Persist recent commands to `localStorage` |
 | `maxRecent` | `number` | `5` | Maximum total recent commands stored |
 | `maxRecentPerGroup` | `number` | `0` | Max recent per group (`0` = unlimited) |
@@ -390,6 +392,7 @@ app.use(VCommandPalettePlugin, options)
 ```ts
 app.use(VCommandPalettePlugin, {
   hotkey: ['$mod', 'k'],
+  colorTheme: 'system',          // 'light' | 'dark' | 'system'
   persistRecent: true,
   maxRecent: 8,
   maxRecentPerGroup: 2,
@@ -452,7 +455,7 @@ import MyIcon from './MyIcon.vue'
 The built-in `fuzzySearch` function is exported for standalone use:
 
 ```ts
-import { fuzzySearch, highlightMatches } from 'vue-command-palette'
+import { fuzzySearch, highlightMatches } from '@macrulez/vue-command-palette'
 
 const results = fuzzySearch('git cm', commands)
 // sorted by score: exact → prefix → substring → fuzzy
@@ -502,7 +505,7 @@ fuzzySearch('strase',[{ id: '2', label: 'Straße', perform: () => {} }])  // →
 To bind a real global shortcut, use `createKeyboardManager` directly:
 
 ```ts
-import { createKeyboardManager } from 'vue-command-palette'
+import { createKeyboardManager } from '@macrulez/vue-command-palette'
 
 const km = createKeyboardManager()
 km.start()
@@ -746,6 +749,26 @@ The stylesheet includes automatic dark mode via `@media (prefers-color-scheme: d
 }
 ```
 
+### Built-in theme switcher
+
+The palette includes a built-in light / system / dark switcher rendered directly inside the search bar. The initial theme is set via the `colorTheme` plugin option and can be changed at runtime via `useCommandPalette()`:
+
+```ts
+app.use(VCommandPalettePlugin, {
+  colorTheme: 'dark',   // 'light' | 'dark' | 'system' (default: 'system')
+})
+```
+
+```ts
+// Change theme programmatically from any component
+import { useCommandPalette } from '@macrulez/vue-command-palette'
+
+const { colorTheme } = useCommandPalette()
+colorTheme.value = 'dark'
+```
+
+`'system'` follows `prefers-color-scheme`. Selecting `'light'` or `'dark'` applies `.vcp-theme-light` / `.vcp-theme-dark` on the overlay, which override the media query.
+
 ---
 
 ## Nuxt
@@ -754,7 +777,7 @@ Add to `nuxt.config.ts`:
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['vue-command-palette/nuxt'],
+  modules: ['@macrulez/vue-command-palette/nuxt'],
 })
 ```
 
@@ -762,7 +785,7 @@ Options are read from `runtimeConfig.public.vCommandPalette`. Configure in `nuxt
 
 ```ts
 export default defineNuxtConfig({
-  modules: ['vue-command-palette/nuxt'],
+  modules: ['@macrulez/vue-command-palette/nuxt'],
   runtimeConfig: {
     public: {
       vCommandPalette: {
@@ -782,7 +805,7 @@ The Nuxt module installs the plugin automatically. `useCommandPalette`, `useRegi
 ## Testing utilities
 
 ```ts
-import { createPaletteContext, PaletteProvider } from 'vue-command-palette/testing'
+import { createPaletteContext, PaletteProvider } from '@macrulez/vue-command-palette/testing'
 ```
 
 ### `createPaletteContext`
@@ -790,7 +813,7 @@ import { createPaletteContext, PaletteProvider } from 'vue-command-palette/testi
 Creates a fully isolated palette context — no real DOM, no plugin, no `localStorage` side-effects:
 
 ```ts
-import { createPaletteContext } from 'vue-command-palette/testing'
+import { createPaletteContext } from '@macrulez/vue-command-palette/testing'
 import { mount } from '@vue/test-utils'
 import { describe, it, expect, vi } from 'vitest'
 import MyComponent from './MyComponent.vue'
@@ -823,7 +846,7 @@ describe('MyComponent', () => {
 A wrapper component that provides context to its slot children — useful for component tree tests:
 
 ```ts
-import { PaletteProvider } from 'vue-command-palette/testing'
+import { PaletteProvider } from '@macrulez/vue-command-palette/testing'
 import { mount } from '@vue/test-utils'
 
 const wrapper = mount(PaletteProvider, {
@@ -881,7 +904,7 @@ import type {
   PaletteState,
   CommandStore,
   KeyboardManager,
-} from 'vue-command-palette'
+} from '@macrulez/vue-command-palette'
 ```
 
 > **Note**: The named export `CommandGroup` is the **Vue component**. The group-definition interface is exported as `CommandGroupType` to avoid the collision.
@@ -967,12 +990,12 @@ typeof navigator !== 'undefined' && navigator.platform.includes('Mac')
 
 | Entry point | Peer deps | Notes |
 |---|---|---|
-| `vue-command-palette` | `vue ^3.3` | Components, composables, fuzzy engine, keyboard manager |
-| `vue-command-palette/style.css` | — | Default styles; ~3 KB |
-| `vue-command-palette/testing` | `vue ^3.3` | `createPaletteContext` + `PaletteProvider`; dev/test only |
-| `vue-command-palette/nuxt` | `nuxt ^3`, `vue ^3.3` | Nuxt auto-plugin |
+| `@macrulez/vue-command-palette` | `vue ^3.3` | Components, composables, fuzzy engine, keyboard manager |
+| `@macrulez/vue-command-palette/style.css` | — | Default styles; ~3 KB |
+| `@macrulez/vue-command-palette/testing` | `vue ^3.3` | `createPaletteContext` + `PaletteProvider`; dev/test only |
+| `@macrulez/vue-command-palette/nuxt` | `nuxt ^3`, `vue ^3.3` | Nuxt auto-plugin |
 
-Ships as tree-shakeable ESM (`dist/vue-command-palette.js`) + CJS (`dist/vue-command-palette.cjs`). Core bundle without styles is ≤ 10 KB gzip.
+Ships as tree-shakeable ESM (`dist/@macrulez/vue-command-palette.js`) + CJS (`dist/@macrulez/vue-command-palette.cjs`). Core bundle without styles is ≤ 10 KB gzip.
 
 ---
 
@@ -988,4 +1011,4 @@ Danil Lisin Vladimirovich aka Macrulez
 
 GitHub: [macrulezru](https://github.com/macrulezru) · Website: [macrulez.ru/en](https://macrulez.ru/en)
 
-Bugs and questions — [issues](https://github.com/macrulezru/vue-command-palette/issues)
+Bugs and questions — [issues](https://github.com/macrulezru/@macrulez/vue-command-palette/issues)

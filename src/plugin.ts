@@ -13,6 +13,7 @@ export const VCommandPalettePlugin = {
       maxRecent = 5,
       maxRecentPerGroup = 0,
       localStorageKey = 'vcp:recent',
+      colorTheme: initialColorTheme = 'system',
       onOpen,
       onClose,
       onError,
@@ -36,6 +37,7 @@ export const VCommandPalettePlugin = {
     const recentIds = ref<string[]>(storedRecent)
 
     const results = computed(() => store.search(query.value))
+    const colorTheme = ref<'light' | 'dark' | 'system'>(initialColorTheme)
 
     const ctx: PaletteContext = {
       store,
@@ -47,6 +49,7 @@ export const VCommandPalettePlugin = {
       recentIds,
       loadingCommandId,
       results,
+      colorTheme,
       persistRecent,
       maxRecent,
       maxRecentPerGroup: maxRecentPerGroup ?? 0,

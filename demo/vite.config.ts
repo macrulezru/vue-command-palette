@@ -7,11 +7,11 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: 'vue-command-palette/style.css',
+        find: '@macrulez/vue-command-palette/style.css',
         replacement: fileURLToPath(new URL('../src/style.css', import.meta.url)),
       },
       {
-        find: 'vue-command-palette',
+        find: '@macrulez/vue-command-palette',
         replacement: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
       },
     ],
