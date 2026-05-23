@@ -50,9 +50,10 @@ export interface PaletteOptions {
   maxRecent?: number
   maxRecentPerGroup?: number
   localStorageKey?: string
+  colorTheme?: 'light' | 'dark' | 'system'
   onOpen?: () => void
   onClose?: () => void
   onError?: (err: unknown, command: Command) => void
 }
 
-export const PALETTE_INJECT_KEY = Symbol('vue-command-palette')
+export const PALETTE_INJECT_KEY = Symbol('@macrulez/vue-command-palette')

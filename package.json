@@ -1,5 +1,5 @@
 {
-  "name": "vue-command-palette",
+  "name": "@macrulez/vue-command-palette",
   "version": "0.1.0",
   "description": "Command+K palette for Vue 3 — headless, fuzzy search, keyboard navigation, nested palettes",
   "type": "module",

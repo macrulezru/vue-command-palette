@@ -14,6 +14,7 @@ export interface PaletteContext {
   recentIds: Ref<string[]>
   loadingCommandId: Ref<string | null>
   results: ComputedRef<SearchResult[]>
+  colorTheme: Ref<'light' | 'dark' | 'system'>
   persistRecent: boolean
   maxRecent: number
   maxRecentPerGroup: number
@@ -32,11 +33,11 @@ function saveRecent(ids: string[], key: string) {
 
 export function useCommandPalette() {
   const ctx = inject<PaletteContext>(PALETTE_INJECT_KEY)
-  if (!ctx) throw new Error('[vue-command-palette] Plugin not installed. Use app.use(VCommandPalettePlugin).')
+  if (!ctx) throw new Error('[@macrulez/vue-command-palette] Plugin not installed. Use app.use(VCommandPalettePlugin).')
 
   const {
     store, isOpen, query, activeIndex, history, recentIds,
-    loadingCommandId, results, persistRecent, maxRecent, localStorageKey,
+    loadingCommandId, results, colorTheme, persistRecent, maxRecent, localStorageKey,
     onOpen: onOpenCb, onClose: onCloseCb, onError: onErrorCb,
   } = ctx
 
@@ -86,7 +87,6 @@ export function useCommandPalette() {
 
     if (cmd.subCommands?.length) {
       open(cmd.id)
-      store.registerCommands(cmd.subCommands, cmd.id)
       return
     }
 
@@ -98,7 +98,7 @@ export function useCommandPalette() {
       await cmd.perform()
     } catch (err) {
       if (onErrorCb) onErrorCb(err, cmd)
-      else console.error('[vue-command-palette] Command error:', err)
+      else console.error('[@macrulez/vue-command-palette] Command error:', err)
     } finally {
       loadingCommandId.value = null
     }
@@ -131,6 +131,7 @@ export function useCommandPalette() {
     activeIndex,
     history: readonly(history),
     loadingCommandId: readonly(loadingCommandId),
+    colorTheme,
     open,
     close,
     toggle,
@@ -146,14 +147,14 @@ export function useCommandPalette() {
 
 export function useRegisterCommands(commands: Command[]): void {
   const ctx = inject<PaletteContext>(PALETTE_INJECT_KEY)
-  if (!ctx) throw new Error('[vue-command-palette] Plugin not installed.')
+  if (!ctx) throw new Error('[@macrulez/vue-command-palette] Plugin not installed.')
   const cleanup = ctx.store.registerCommands(commands)
   onUnmounted(cleanup)
 }
 
 export function useRegisterGroup(group: CommandGroup): void {
   const ctx = inject<PaletteContext>(PALETTE_INJECT_KEY)
-  if (!ctx) throw new Error('[vue-command-palette] Plugin not installed.')
+  if (!ctx) throw new Error('[@macrulez/vue-command-palette] Plugin not installed.')
   const cleanup = ctx.store.registerGroup(group)
   onUnmounted(cleanup)
 }

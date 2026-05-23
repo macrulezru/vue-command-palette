@@ -32,7 +32,35 @@
     --vcp-kbd-bg: #2a2a2a;
     --vcp-kbd-border: #444444;
     --vcp-group-header-color: #666666;
+    --vcp-scrollbar-thumb: #444444;
+    --vcp-scrollbar-thumb-hover: #666666;
   }
+}
+
+/* Explicit dark theme (overrides media query) */
+.vcp-theme-dark {
+  --vcp-dialog-bg: #1a1a1a;
+  --vcp-dialog-color: #eeeeee;
+  --vcp-border-color: #333333;
+  --vcp-item-active-bg: #2a2a2a;
+  --vcp-kbd-bg: #2a2a2a;
+  --vcp-kbd-border: #444444;
+  --vcp-group-header-color: #666666;
+  --vcp-scrollbar-thumb: #444444;
+  --vcp-scrollbar-thumb-hover: #666666;
+}
+
+/* Explicit light theme (overrides media query dark) */
+.vcp-theme-light {
+  --vcp-dialog-bg: #ffffff;
+  --vcp-dialog-color: #111111;
+  --vcp-border-color: #eeeeee;
+  --vcp-item-active-bg: #f0f0f0;
+  --vcp-kbd-bg: #eeeeee;
+  --vcp-kbd-border: #dddddd;
+  --vcp-group-header-color: #999999;
+  --vcp-scrollbar-thumb: #d0d0d0;
+  --vcp-scrollbar-thumb-hover: #b0b0b0;
 }
 
 .vcp-overlay {
@@ -78,16 +106,74 @@
 .vcp-input-wrap {
   padding: 12px;
   border-bottom: 1px solid var(--vcp-border-color);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .vcp-input {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   border: none;
   outline: none;
   font-size: var(--vcp-input-font-size);
   background: transparent;
   color: inherit;
   box-sizing: border-box;
+}
+
+.vcp-theme-switcher {
+  display: flex;
+  gap: 1px;
+  flex-shrink: 0;
+}
+
+.vcp-theme-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 5px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.4;
+  transition: opacity 80ms, background 80ms;
+  padding: 0;
+}
+
+.vcp-theme-btn:hover { opacity: 0.8; }
+.vcp-theme-btn--active { opacity: 1; background: var(--vcp-item-active-bg); }
+
+.vcp-theme-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  -webkit-mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-size: contain;
+  mask-repeat: no-repeat;
+  mask-position: center;
+}
+
+.vcp-theme-icon--light {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Ccircle cx='7' cy='7' r='2.5' fill='black'/%3E%3Cpath d='M7 1v2M7 11v2M1 7h2M11 7h2M9.83 4.17L11.24 2.76M4.17 4.17L2.76 2.76M4.17 9.83L2.76 11.24M9.83 9.83L11.24 11.24' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Ccircle cx='7' cy='7' r='2.5' fill='black'/%3E%3Cpath d='M7 1v2M7 11v2M1 7h2M11 7h2M9.83 4.17L11.24 2.76M4.17 4.17L2.76 2.76M4.17 9.83L2.76 11.24M9.83 9.83L11.24 11.24' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.vcp-theme-icon--system {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Crect x='1' y='1.5' width='12' height='8' rx='1.5' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M5 13h4M7 9.5v3.5' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Crect x='1' y='1.5' width='12' height='8' rx='1.5' stroke='black' stroke-width='1.5'/%3E%3Cpath d='M5 13h4M7 9.5v3.5' stroke='black' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+.vcp-theme-icon--dark {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='black'%3E%3Cpath d='M10.3 3.2A5 5 0 1 0 10.3 10.8A4 4 0 0 1 10.3 3.2Z'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='black'%3E%3Cpath d='M10.3 3.2A5 5 0 1 0 10.3 10.8A4 4 0 0 1 10.3 3.2Z'/%3E%3C/svg%3E");
 }
 
 .vcp-list {

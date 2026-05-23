@@ -103,8 +103,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { CommandPalette, highlightMatches, useCommandPalette, useRegisterGroup } from 'vue-command-palette'
-import type { SearchResult } from 'vue-command-palette'
+import { CommandPalette, highlightMatches, useCommandPalette, useRegisterGroup } from '@macrulez/vue-command-palette'
+import type { SearchResult } from '@macrulez/vue-command-palette'
 import { buildCommands } from './commands'
 
 const page = ref('dashboard')
@@ -159,7 +159,7 @@ const features = [
   { icon: '🎨', title: 'CSS Custom Properties', desc: '20+ CSS variables for full theme customization.', code: '--vcp-dialog-bg, --vcp-item-active-bg, ...' },
   { icon: '🧩', title: 'Headless Slots', desc: '#item, #group-header, #empty, #header, #footer, #trigger.', code: '<CommandPalette><template #item="{ command }">' },
   { icon: '🔒', title: 'enabled() Guard', desc: 'Dynamic command availability evaluated on every render.', code: 'enabled: () => currentUser.isAdmin' },
-  { icon: '🧪', title: 'Testing Utilities', desc: 'createPaletteContext + PaletteProvider for unit tests.', code: 'import { createPaletteContext } from "vue-command-palette/testing"' },
+  { icon: '🧪', title: 'Testing Utilities', desc: 'createPaletteContext + PaletteProvider for unit tests.', code: 'import { createPaletteContext } from "@macrulez/vue-command-palette/testing"' },
 ]
 
 function highlight(label: string, matches: SearchResult['matches']) {

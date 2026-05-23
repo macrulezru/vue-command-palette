@@ -43,11 +43,13 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
   const history = ref<Array<{ paletteId: string; query: string; activeIndex: number }>>([])
   const recentIds = ref<string[]>([])
   const loadingCommandId = ref<string | null>(null)
+  const colorTheme = ref<'light' | 'dark' | 'system'>('system')
   const results = computed(() => store.search(query.value))
 
   const ctx: PaletteContext = {
     store, keyboard,
     isOpen, query, activeIndex, history, recentIds, loadingCommandId, results,
+    colorTheme,
     persistRecent, maxRecent, maxRecentPerGroup, localStorageKey,
     onOpen, onClose, onError,
   }

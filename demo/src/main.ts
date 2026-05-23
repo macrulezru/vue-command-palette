@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
-import { VCommandPalettePlugin } from 'vue-command-palette'
-import 'vue-command-palette/style.css'
+import { VCommandPalettePlugin } from '@macrulez/vue-command-palette'
+import '@macrulez/vue-command-palette/style.css'
 import App from './App.vue'
 import './style.css'
 

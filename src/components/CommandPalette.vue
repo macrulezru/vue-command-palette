@@ -6,6 +6,7 @@
       <div
         v-if="isOpen"
         class="vcp-overlay"
+        :class="ctx.colorTheme.value !== 'system' ? `vcp-theme-${ctx.colorTheme.value}` : ''"
         role="presentation"
         @click.self="close"
       >
@@ -62,6 +63,20 @@
                   @input="onInput"
                 />
               </slot>
+
+              <div class="vcp-theme-switcher" aria-label="Color theme">
+                <button
+                  v-for="t in (['light', 'system', 'dark'] as const)"
+                  :key="t"
+                  class="vcp-theme-btn"
+                  :class="{ 'vcp-theme-btn--active': ctx.colorTheme.value === t }"
+                  :title="t === 'light' ? 'Light theme' : t === 'dark' ? 'Dark theme' : 'System theme'"
+                  type="button"
+                  @click="ctx.colorTheme.value = t"
+                >
+                  <span class="vcp-theme-icon" :class="`vcp-theme-icon--${t}`" aria-hidden="true" />
+                </button>
+              </div>
             </div>
 
             <div
@@ -70,21 +85,21 @@
               class="vcp-list"
               role="listbox"
               :aria-label="placeholder"
-              v-show="isLoading || recentCommands.length || query.trim() || allGroupedFlat.length"
+              v-show="isLoading || currentSubCommands != null || recentCommands.length || query.trim() || allGroupedFlat.length"
             >
               <div v-if="isLoading" class="vcp-state vcp-state--loading">{{ loadingText }}</div>
 
-              <!-- No query: recent (if any) + all commands -->
+              <!-- No query: nested palette sub-commands OR recent + all commands -->
               <template v-else-if="!query.trim()">
-                <template v-if="recentCommands.length">
-                  <div class="vcp-group__header" aria-hidden="true">Recent</div>
+                <!-- Nested palette -->
+                <template v-if="currentSubCommands">
                   <CommandItem
-                    v-for="(cmd, i) in recentCommands"
+                    v-for="(cmd, i) in currentSubCommands"
                     :key="cmd.id"
                     :command="cmd"
                     :active="i === activeIndex"
                     :matches="[]"
-                    :item-id="`vcp-item-recent-${cmd.id}`"
+                    :item-id="`vcp-item-sub-${cmd.id}`"
                     :loading-command-id="loadingCommandId"
                     @execute="execute(cmd)"
                     @activate="activeIndex = i"
@@ -93,25 +108,47 @@
                     <template v-if="$slots['item-shortcut']" #item-shortcut="s"><slot name="item-shortcut" v-bind="s" /></template>
                     <template v-if="$slots['item']" #default="s"><slot name="item" v-bind="s" /></template>
                   </CommandItem>
-                  <div v-if="allGrouped.length" class="vcp-section" aria-hidden="true" />
                 </template>
 
-                <template v-for="(entry, gi) in allGrouped" :key="entry.group.id">
-                  <div v-if="gi > 0" class="vcp-section" aria-hidden="true" />
-                  <CommandGroup
-                    :group="entry.group"
-                    :items="entry.items"
-                    :active-index="activeIndex"
-                    :global-offset="recentCommands.length + allGroupedOffset(gi)"
-                    :loading-command-id="loadingCommandId"
-                    @execute="execute($event)"
-                    @activate="activeIndex = $event"
-                  >
-                    <template v-if="$slots['group-header']" #group-header="s"><slot name="group-header" v-bind="s" /></template>
-                    <template v-if="$slots['item-icon']" #item-icon="s"><slot name="item-icon" v-bind="s" /></template>
-                    <template v-if="$slots['item-shortcut']" #item-shortcut="s"><slot name="item-shortcut" v-bind="s" /></template>
-                    <template v-if="$slots['item']" #item="s"><slot name="item" v-bind="s" /></template>
-                  </CommandGroup>
+                <!-- Top level: recent (if any) + all commands -->
+                <template v-else>
+                  <template v-if="recentCommands.length">
+                    <div class="vcp-group__header" aria-hidden="true">Recent</div>
+                    <CommandItem
+                      v-for="(cmd, i) in recentCommands"
+                      :key="cmd.id"
+                      :command="cmd"
+                      :active="i === activeIndex"
+                      :matches="[]"
+                      :item-id="`vcp-item-recent-${cmd.id}`"
+                      :loading-command-id="loadingCommandId"
+                      @execute="execute(cmd)"
+                      @activate="activeIndex = i"
+                    >
+                      <template v-if="$slots['item-icon']" #item-icon="s"><slot name="item-icon" v-bind="s" /></template>
+                      <template v-if="$slots['item-shortcut']" #item-shortcut="s"><slot name="item-shortcut" v-bind="s" /></template>
+                      <template v-if="$slots['item']" #default="s"><slot name="item" v-bind="s" /></template>
+                    </CommandItem>
+                    <div v-if="allGrouped.length" class="vcp-section" aria-hidden="true" />
+                  </template>
+
+                  <template v-for="(entry, gi) in allGrouped" :key="entry.group.id">
+                    <div v-if="gi > 0" class="vcp-section" aria-hidden="true" />
+                    <CommandGroup
+                      :group="entry.group"
+                      :items="entry.items"
+                      :active-index="activeIndex"
+                      :global-offset="recentCommands.length + allGroupedOffset(gi)"
+                      :loading-command-id="loadingCommandId"
+                      @execute="execute($event)"
+                      @activate="activeIndex = $event"
+                    >
+                      <template v-if="$slots['group-header']" #group-header="s"><slot name="group-header" v-bind="s" /></template>
+                      <template v-if="$slots['item-icon']" #item-icon="s"><slot name="item-icon" v-bind="s" /></template>
+                      <template v-if="$slots['item-shortcut']" #item-shortcut="s"><slot name="item-shortcut" v-bind="s" /></template>
+                      <template v-if="$slots['item']" #item="s"><slot name="item" v-bind="s" /></template>
+                    </CommandGroup>
+                  </template>
                 </template>
               </template>
 
@@ -248,6 +285,15 @@ const recentCommands = computed(() => {
   })
 })
 
+// Sub-commands of the current nested palette (null when at top level)
+const currentSubCommands = computed<Command[] | null>(() => {
+  if (!history.value.length) return null
+  const paletteId = history.value[history.value.length - 1].paletteId
+  const cmd = ctx.store.getAllCommands().find(c => c.id === paletteId)
+  if (!cmd?.subCommands?.length) return null
+  return cmd.subCommands.filter(c => !c.disabled && (c.enabled == null || c.enabled()))
+})
+
 // All commands grouped (shown when no query and no recent)
 const allGrouped = computed(() =>
   ctx.store.getSortedGroups()
@@ -293,6 +339,17 @@ watch(query, async (q) => {
 const syncResults = computed(() => ctx.store.search(query.value))
 
 const displayResults = computed(() => {
+  const subs = currentSubCommands.value
+  if (subs !== null && query.value.trim()) {
+    const q = query.value.toLowerCase()
+    return subs
+      .filter(c =>
+        c.label.toLowerCase().includes(q) ||
+        c.description?.toLowerCase().includes(q) ||
+        c.keywords?.some(k => k.toLowerCase().includes(q))
+      )
+      .map(c => ({ command: c, score: 50, matches: [] as Array<[number, number]>, groupId: undefined } as SearchResult))
+  }
   const merged = [...syncResults.value]
   for (const ar of asyncResults.value) {
     if (!merged.find(r => r.command.id === ar.command.id)) merged.push(ar)
@@ -377,7 +434,10 @@ function onDialogKeydown(e: KeyboardEvent) {
   }
 
   const total = displayResults.value.length
-    || (query.value.trim() ? 0 : recentCommands.value.length + allGroupedFlat.value.length)
+    || (query.value.trim() ? 0 :
+      currentSubCommands.value
+        ? currentSubCommands.value.length
+        : recentCommands.value.length + allGroupedFlat.value.length)
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     if (total) activeIndex.value = (activeIndex.value + 1) % total
@@ -393,9 +453,14 @@ function onDialogKeydown(e: KeyboardEvent) {
       if (current?.command) execute(current.command)
     } else {
       const i = activeIndex.value
-      const cmd = i < recentCommands.value.length
-        ? recentCommands.value[i]
-        : allGroupedFlat.value[i - recentCommands.value.length]?.command
+      let cmd: Command | undefined
+      if (currentSubCommands.value) {
+        cmd = currentSubCommands.value[i]
+      } else {
+        cmd = i < recentCommands.value.length
+          ? recentCommands.value[i]
+          : allGroupedFlat.value[i - recentCommands.value.length]?.command
+      }
       if (cmd) execute(cmd)
     }
   } else if (e.key === 'Escape') {
