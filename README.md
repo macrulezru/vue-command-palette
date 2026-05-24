@@ -1,4 +1,11 @@
-# @macrulez/vue-command-palette
+<div align="center" style="background:#111827;border-radius:20px;padding:28px 20px 20px;margin-bottom:32px">
+  <h1 style="color:#f9fafb;margin:0 0 32px;font-size:2.2em;letter-spacing:-0.03em;font-weight:700;font-family:sans-serif">@macrulez/vue-command-palette</h1>
+  <img
+    src="https://s3.twcstorage.ru/c9a2cc89-780f97fd-311d-4a1a-b86f-c25665c9dc46/images/npm/vue-command-palette.webp"
+    alt="vue-virtual-scroller-kit"
+    style="max-width:100%;width:auto;height:300px;border-radius:12px"
+  />
+</div>
 
 Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped commands, nested sub-palettes, global keyboard shortcuts, async search, confirmation dialogs, recent command history, and full headless customisation via slots — all with a single peer dependency (Vue 3).
 
