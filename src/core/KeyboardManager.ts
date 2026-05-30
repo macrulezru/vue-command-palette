@@ -15,6 +15,20 @@ function isSequenceShortcut(keys: string[]): boolean {
   return keys.length >= 2 && keys.every(k => !isModifier(k))
 }
 
+function hasCtrlOrMeta(keys: string[]): boolean {
+  return keys.some(k => k === '$mod' || k === 'ctrl' || k === 'meta')
+}
+
+function isEditableTarget(event: KeyboardEvent): boolean {
+  const el = event.target as HTMLElement | null
+  if (!el) return false
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (el.isContentEditable) return true
+  const attr = el.getAttribute?.('contenteditable')
+  return attr === '' || attr === 'true'
+}
+
 function normalizeKey(key: string, event: KeyboardEvent): boolean {
   if (key === '$mod') return event.metaKey || event.ctrlKey
   if (key === 'shift') return event.shiftKey
@@ -48,9 +62,14 @@ export function createKeyboardManager() {
   let listening = false
 
   function handleKeyDown(event: KeyboardEvent) {
-    // 1. Try modifier-based hotkeys first
+    const editable = isEditableTarget(event)
+
+    // 1. Try modifier-based hotkeys first.
+    //    Plain-key / shift-only hotkeys are ignored while typing in a field;
+    //    Ctrl/Meta combos (e.g. $mod+k) still fire so the palette can be opened.
     for (const { keys, handler } of shortcuts) {
       if (isSequenceShortcut(keys)) continue
+      if (editable && !hasCtrlOrMeta(keys)) continue
       if (matchesHotkeyShortcut(keys, event)) {
         event.preventDefault()
         handler()
@@ -58,7 +77,8 @@ export function createKeyboardManager() {
       }
     }
 
-    // 2. Handle bare-key sequences like ['g', 'h']
+    // 2. Handle bare-key sequences like ['g', 'h'] — never while typing in a field
+    if (editable) return
     const seqShortcuts = shortcuts.filter(s => isSequenceShortcut(s.keys))
     if (!seqShortcuts.length) return
     if (event.metaKey || event.ctrlKey || event.altKey) return

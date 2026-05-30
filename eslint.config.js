@@ -36,13 +36,21 @@ export default tseslint.config(
 
   // Test files
   {
-    files: ['src/__tests__/**/*.ts'],
+    files: ['**/*.test.ts', 'src/__tests__/**/*.ts'],
     languageOptions: {
       globals: { ...globals.browser, ...globals.node },
     },
     rules: {
       'vue/one-component-per-file': 'off',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+    },
+  },
+
+  // Nuxt plugin uses the #app virtual import, only resolvable inside a Nuxt project
+  {
+    files: ['src/nuxt.ts'],
+    rules: {
+      '@typescript-eslint/ban-ts-comment': 'off',
     },
   },
 

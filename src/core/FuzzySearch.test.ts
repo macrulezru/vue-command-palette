@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { fuzzySearch, highlightMatches } from './FuzzySearch'
+import type { VNode } from 'vue'
+import { fuzzySearch, getMatchRanges, highlightMatches } from './FuzzySearch'
 import type { Command } from '../types'
 
 function cmd(id: string, label: string, extra: Partial<Command> = {}): Command {
@@ -62,6 +63,16 @@ describe('fuzzySearch', () => {
     expect(fuzzySearch('alpha', [cmd('a', 'Alpha', { enabled: () => true })])).toHaveLength(1)
   })
 
+  it('includes disabled commands (demoted to the end) when includeDisabled is set', () => {
+    const cmds = [cmd('a', 'Alpha'), cmd('b', 'Alfa', { disabled: true })]
+    // default: disabled excluded
+    expect(fuzzySearch('al', cmds).map(r => r.command.id)).toEqual(['a'])
+    // includeDisabled: present, but available ones rank first
+    const incl = fuzzySearch('al', cmds, true)
+    expect(incl.map(r => r.command.id)).toContain('b')
+    expect(incl[incl.length - 1].command.id).toBe('b')
+  })
+
   it('searches keywords when label does not match', () => {
     const c = cmd('a', 'Open Settings', { keywords: ['preferences', 'config'] })
     expect(fuzzySearch('config', [c])).toHaveLength(1)
@@ -71,6 +82,46 @@ describe('fuzzySearch', () => {
     const c = cmd('a', 'Preferences', { aliases: ['Settings', 'Options'] })
     const results = fuzzySearch('settings', [c])
     expect(results).toHaveLength(1)
+  })
+
+  it('ranks by description when the label does not match (substring)', () => {
+    const c = cmd('a', 'Format', { description: 'Run Prettier on the current file' })
+    const results = fuzzySearch('prettier', [c])
+    expect(results).toHaveLength(1)
+  })
+
+  it('reports the matched field and text', () => {
+    const byLabel = fuzzySearch('open', [cmd('a', 'Open File')])
+    expect(byLabel[0].matchedField).toBe('label')
+
+    const byKeyword = fuzzySearch('config', [cmd('b', 'Settings', { keywords: ['config'] })])
+    expect(byKeyword[0].matchedField).toBe('keyword')
+    expect(byKeyword[0].matchedText).toBe('config')
+
+    const byAlias = fuzzySearch('prefs', [cmd('c', 'Settings', { aliases: ['prefs'] })])
+    expect(byAlias[0].matchedField).toBe('alias')
+    expect(byAlias[0].matchedText).toBe('prefs')
+  })
+
+  it('does NOT match description via loose subsequence', () => {
+    // "error" appears as a subsequence of "Charts, metrics and reports" but not as a substring
+    const c = cmd('a', 'Go to Analytics', { description: 'Charts, metrics and reports' })
+    expect(fuzzySearch('error', [c])).toHaveLength(0)
+  })
+
+  it('keeps label highlight even when an alias produces the winning score', () => {
+    // label fuzzy-matches "stns" weakly; alias "Settings" matches exactly (higher score)
+    const c = cmd('a', 'Settings', { aliases: ['Preferences'] })
+    const results = fuzzySearch('preferences', [c])
+    // alias wins the score, but label has no match → matches stays empty (not broken)
+    expect(results[0].score).toBeGreaterThanOrEqual(80)
+    expect(results[0].matches).toEqual([])
+  })
+
+  it('keeps label match ranges when label also matches alongside a keyword', () => {
+    const c = cmd('a', 'Open File', { keywords: ['document'] })
+    const results = fuzzySearch('open', [c])
+    expect(results[0].matches).toEqual([[0, 3]])
   })
 
   it('alias exact match scores at least 80', () => {
@@ -96,6 +147,34 @@ describe('fuzzySearch', () => {
   it('normalizes diacritics — query with diacritic matches plain label', () => {
     expect(fuzzySearch('résumé', [cmd('a', 'resume')])).toHaveLength(1)
   })
+
+  it('maps highlight ranges back to original indices for decomposed labels', () => {
+    // "Café" written as e + combining acute accent → normalized length differs
+    const label = 'Café'
+    const results = fuzzySearch('cafe', [cmd('a', label)])
+    // slicing the original label with the inclusive range covers the whole grapheme
+    const [start, end] = results[0].matches[0]
+    expect(label.slice(start, end + 1)).toBe(label)
+  })
+
+  it('keeps highlight ranges aligned after a leading diacritic char', () => {
+    // base "e" + combining accent, then "dit" → query "dit" must highlight d-i-t
+    const label = 'édit'
+    const results = fuzzySearch('dit', [cmd('a', label)])
+    const [start, end] = results[0].matches[0]
+    expect(label.slice(start, end + 1)).toBe('dit')
+  })
+})
+
+describe('getMatchRanges', () => {
+  it('returns highlight ranges for a match', () => {
+    expect(getMatchRanges('al', 'Alan Turing')).toEqual([[0, 1]])
+  })
+
+  it('returns [] when there is no match or empty query', () => {
+    expect(getMatchRanges('xyz', 'Alan Turing')).toEqual([])
+    expect(getMatchRanges('', 'Alan Turing')).toEqual([])
+  })
 })
 
 describe('highlightMatches', () => {
@@ -106,20 +185,20 @@ describe('highlightMatches', () => {
 
   it('wraps matched range in mark.vcp-match', () => {
     const vnode = highlightMatches('hello world', [[0, 4]])
-    const children = vnode.children as any[]
+    const children = vnode.children as VNode[]
     expect(children[0].type).toBe('mark')
-    expect(children[0].props.class).toBe('vcp-match')
+    expect((children[0].props as { class: string }).class).toBe('vcp-match')
   })
 
   it('produces text after match', () => {
     const vnode = highlightMatches('hello world', [[0, 4]])
-    const children = vnode.children as any[]
+    const children = vnode.children as VNode[]
     expect(children[1].children).toBe(' world')
   })
 
   it('handles multiple match ranges', () => {
     const vnode = highlightMatches('git status', [[0, 2], [4, 9]])
-    const children = vnode.children as any[]
-    expect(children.filter((c: any) => c.type === 'mark')).toHaveLength(2)
+    const children = vnode.children as VNode[]
+    expect(children.filter((c) => c.type === 'mark')).toHaveLength(2)
   })
 })

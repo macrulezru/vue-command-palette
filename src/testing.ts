@@ -1,8 +1,8 @@
 import { computed, defineComponent, provide as vueProvide, ref } from 'vue'
 import { createCommandStore } from './core/CommandStore'
 import { createKeyboardManager } from './core/KeyboardManager'
-import { PALETTE_INJECT_KEY } from './types'
-import type { Command, CommandGroup, PaletteOptions } from './types'
+import { PALETTE_INJECT_KEY, PALETTE_REGISTRY_KEY } from './types'
+import type { Command, CommandGroup, CommandUsage, PaletteOptions, SearchResult } from './types'
 import type { PaletteContext } from './core/useCommandPalette'
 
 export interface PaletteTestOptions extends PaletteOptions {
@@ -26,12 +26,16 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
     maxRecent = 5,
     maxRecentPerGroup = 0,
     localStorageKey = 'vcp:recent:test',
+    frecency = false,
+    showDisabled = false,
+    onSearch: globalSearch,
     onOpen,
     onClose,
     onError,
+    onHighlight,
   } = options
 
-  const store = createCommandStore()
+  const store = createCommandStore(undefined, true, undefined, showDisabled)
   const keyboard = createKeyboardManager()
 
   if (commands.length) store.registerCommands(commands)
@@ -45,14 +49,24 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
   const loadingCommandId = ref<string | null>(null)
   const colorTheme = ref<'light' | 'dark' | 'system'>('system')
   const results = computed(() => store.search(query.value))
+  const currentResults = ref<SearchResult[]>([])
+  const executeRequest = ref<((cmd: Command) => void) | null>(null)
+  const usage = ref<Record<string, CommandUsage>>({})
+  const pinnedIds = ref<string[]>([])
+  const queryHistory = ref<string[]>([])
 
   const ctx: PaletteContext = {
     store, keyboard,
     isOpen, query, activeIndex, history, recentIds, loadingCommandId, results,
+    currentResults,
+    executeRequest,
     colorTheme,
     persistRecent, maxRecent, maxRecentPerGroup, localStorageKey,
-    onOpen, onClose, onError,
+    frecency, usage, pinnedIds, queryHistory, showDisabled, globalSearch,
+    onOpen, onClose, onError, onHighlight,
   }
+
+  const registry = new Map<string, PaletteContext>([['default', ctx]])
 
   return {
     ctx,
@@ -60,7 +74,10 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
     isOpen,
     query,
     activeIndex,
-    provide: { [PALETTE_INJECT_KEY as unknown as string]: ctx },
+    provide: {
+      [PALETTE_INJECT_KEY as unknown as string]: ctx,
+      [PALETTE_REGISTRY_KEY as unknown as string]: registry,
+    },
   }
 }
 

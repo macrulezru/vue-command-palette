@@ -6,6 +6,8 @@
   --vcp-dialog-radius: 8px;
   --vcp-dialog-shadow: 0 16px 70px rgba(0, 0, 0, 0.2);
   --vcp-dialog-width: 560px;
+  --vcp-dialog-preview-width: 860px;
+  --vcp-preview-width: 300px;
   --vcp-dialog-max-height: 60vh;
   --vcp-dialog-padding-top: 15vh;
   --vcp-border-color: #eeeeee;
@@ -85,6 +87,81 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  transition: max-width 220ms ease;
+}
+
+/* Widened only while the pane is expanded. The dialog's extra width equals the
+   pane width, so the list keeps a constant width during the (synced) animation. */
+.vcp-dialog--preview {
+  max-width: var(--vcp-dialog-preview-width, 860px);
+}
+
+.vcp-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.vcp-body--with-preview .vcp-list {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Outer wrapper: animates width only; overflow hidden clips the fixed-width inner */
+.vcp-preview {
+  flex: 0 0 auto;
+  width: var(--vcp-preview-width, 300px);
+  overflow: hidden;
+  border-left: 1px solid var(--vcp-border-color);
+  transition: width 220ms ease, border-color 220ms ease;
+}
+
+.vcp-preview--collapsed {
+  width: 0;
+  border-left-color: transparent;
+}
+
+/* Inner wrapper: fixed width (no reflow during the width animation) + own scroll */
+.vcp-preview__inner {
+  width: var(--vcp-preview-width, 300px);
+  height: 100%;
+  box-sizing: border-box;
+  overflow-y: auto;
+  padding: 12px 16px;
+  font-size: 13px;
+}
+
+.vcp-preview__info {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--vcp-border-color);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.vcp-preview-toggle {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--vcp-group-header-color);
+  border-radius: var(--vcp-item-radius);
+  cursor: pointer;
+  transition: background 80ms, color 80ms;
+}
+
+.vcp-preview-toggle:hover {
+  background: var(--vcp-item-active-bg);
+}
+
+.vcp-preview-toggle--active {
+  color: var(--vcp-dialog-color);
+  background: var(--vcp-item-active-bg);
 }
 
 .vcp-dialog--compact {
@@ -120,6 +197,26 @@
   background: transparent;
   color: inherit;
   box-sizing: border-box;
+}
+
+.vcp-mode-chip {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--vcp-item-active-bg);
+  color: var(--vcp-dialog-color);
+}
+
+.vcp-input-spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--vcp-border-color);
+  border-top-color: var(--vcp-group-header-color);
+  border-radius: 50%;
+  animation: vcp-spin 0.6s linear infinite;
+  flex-shrink: 0;
 }
 
 .vcp-theme-switcher {
@@ -201,8 +298,6 @@
   background: var(--vcp-scrollbar-thumb-hover, #b0b0b0);
 }
 
-.vcp-group { }
-
 .vcp-group__header {
   padding: 6px 12px 2px;
   font-size: var(--vcp-group-header-font-size);
@@ -210,6 +305,13 @@
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--vcp-group-header-color);
+}
+
+.vcp-group__header--sub {
+  padding-left: 20px;
+  text-transform: none;
+  letter-spacing: 0;
+  opacity: 0.8;
 }
 
 .vcp-item {
@@ -249,6 +351,167 @@
   text-overflow: ellipsis;
 }
 
+.vcp-item__context {
+  color: var(--vcp-group-header-color);
+  font-weight: 400;
+}
+
+.vcp-item__match-hint {
+  margin-left: 6px;
+  font-size: 0.85em;
+  color: var(--vcp-group-header-color);
+  font-style: italic;
+}
+
+.vcp-item__chevron {
+  flex-shrink: 0;
+  width: 12px;
+  text-align: center;
+  color: var(--vcp-group-header-color);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.vcp-item__actions-hint {
+  flex-shrink: 0;
+  color: var(--vcp-group-header-color);
+  font-size: 16px;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.vcp-item__pin {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--vcp-group-header-color);
+}
+
+/* The glyph is hidden by default… */
+.vcp-item__pin-icon {
+  visibility: hidden;
+  opacity: 0.45;
+  transition: opacity 80ms;
+}
+
+/* …shown as a ghost on the active row (hover or keyboard navigation)… */
+.vcp-item--active .vcp-item__pin-icon {
+  visibility: visible;
+}
+
+/* …always shown and accented when the command is pinned… */
+.vcp-item__pin--on .vcp-item__pin-icon {
+  opacity: 1;
+  color: var(--vcp-match-color, currentColor);
+}
+
+/* …and full-strength when hovering the pin itself. */
+.vcp-item__pin:hover .vcp-item__pin-icon,
+.vcp-item__pin--show .vcp-item__pin-icon {
+  visibility: visible;
+  opacity: 1;
+}
+
+.vcp-actions {
+  padding: 6px;
+  max-height: var(--vcp-dialog-max-height);
+  overflow-y: auto;
+}
+
+.vcp-actions__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px 8px;
+  border-bottom: 1px solid var(--vcp-border-color);
+  margin-bottom: 4px;
+}
+
+.vcp-actions__back {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--vcp-dialog-color);
+  border-radius: var(--vcp-item-radius);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.vcp-actions__back:hover {
+  background: var(--vcp-item-active-bg);
+}
+
+.vcp-actions__title {
+  flex: 1;
+  font-size: var(--vcp-group-header-font-size);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vcp-group-header-color);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vcp-actions__hint {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--vcp-group-header-color);
+}
+
+.vcp-item__checkbox {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--vcp-border-color);
+  border-radius: 4px;
+  position: relative;
+}
+
+.vcp-item__checkbox--on {
+  background: var(--vcp-match-color, currentColor);
+  border-color: var(--vcp-match-color, currentColor);
+}
+
+.vcp-item__checkbox--on::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 1px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.vcp-item--selected {
+  background: var(--vcp-item-active-bg);
+}
+
+.vcp-item__badge {
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  background: var(--vcp-badge-bg, var(--vcp-kbd-bg));
+  color: var(--vcp-badge-color, var(--vcp-dialog-color));
+}
+
 .vcp-item__spinner {
   width: 14px;
   height: 14px;
@@ -267,6 +530,18 @@
   height: 1px;
   background: var(--vcp-border-color);
   margin: 4px 12px;
+}
+
+.vcp-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .vcp-item__shortcut {
@@ -356,5 +631,48 @@ mark.vcp-match {
   .vcp-fade-enter-active,
   .vcp-fade-leave-active {
     transition: none;
+  }
+
+  .vcp-input-spinner,
+  .vcp-item__spinner {
+    animation-duration: 1.5s;
+  }
+
+  .vcp-dialog,
+  .vcp-preview {
+    transition: none;
+  }
+}
+
+/* Mobile / touch: full-width dialog, larger touch targets, no preview column */
+@media (max-width: 640px) {
+  .vcp-overlay {
+    padding: 8px;
+    padding-top: 8px;
+  }
+
+  .vcp-dialog,
+  .vcp-dialog--preview {
+    max-width: 100%;
+    max-height: 90vh;
+  }
+
+  .vcp-item {
+    height: auto;
+    min-height: 48px;
+  }
+
+  .vcp-preview {
+    display: none;
+  }
+
+  .vcp-body--with-preview .vcp-list {
+    border-right: none;
+  }
+}
+
+@media (hover: none) {
+  .vcp-item:hover {
+    background: transparent;
   }
 }
