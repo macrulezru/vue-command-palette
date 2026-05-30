@@ -116,6 +116,11 @@ body {
   color: var(--sidebar-text);
 }
 
+.trigger-btn--ghost {
+  margin-top: 8px;
+  background: transparent;
+}
+
 .hotkey {
   font-size: 11px;
   padding: 2px 6px;
@@ -282,34 +287,14 @@ body {
 .theme-btn:hover { background: var(--border); }
 .theme-btn--active { background: var(--bg2); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
 
-/* Custom palette item override */
-.custom-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  height: var(--vcp-item-height);
-  cursor: pointer;
-  border-radius: 6px;
-  margin: 0 4px;
-  transition: background 80ms;
-}
-
-.custom-item--active { background: var(--vcp-item-active-bg, #f0f0f0); }
-.custom-item__icon { font-size: 18px; flex-shrink: 0; width: 24px; text-align: center; }
-.custom-item__body { flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
-.custom-item__label { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.custom-item__desc { font-size: 11px; color: var(--vcp-group-header-color, #999); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.custom-item__shortcut { display: flex; gap: 3px; flex-shrink: 0; }
-.custom-item__shortcut kbd {
-  font-family: inherit;
-  font-size: 11px;
-  padding: 2px 5px;
-  background: var(--vcp-kbd-bg, #eee);
-  border-radius: 3px;
-  border: 1px solid var(--vcp-kbd-border, #ddd);
-}
-.custom-item__arrow { color: var(--vcp-group-header-color, #999); font-size: 16px; }
+.preview { display: flex; flex-direction: column; gap: 10px; }
+.preview--empty { color: var(--vcp-group-header-color, #999); font-size: 13px; }
+.preview__icon { font-size: 32px; }
+.preview__title { margin: 0; font-size: 16px; }
+.preview__desc { margin: 0; font-size: 13px; color: var(--vcp-group-header-color, #999); }
+.preview__row { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.preview__key { text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; color: var(--vcp-group-header-color, #999); }
+.preview__row kbd { font-family: inherit; font-size: 11px; padding: 2px 5px; background: var(--vcp-kbd-bg, #eee); border-radius: 4px; margin-right: 3px; }
 
 /* Palette footer */
 .palette-footer {

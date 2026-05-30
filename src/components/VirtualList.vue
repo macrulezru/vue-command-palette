@@ -1,27 +1,37 @@
-<template>
-  <div ref="containerEl" class="vcp-virtual" :style="{ height: containerHeight + 'px', overflowY: 'auto' }" @scroll.passive="onScroll">
-    <div :style="{ height: totalHeight + 'px', position: 'relative' }">
-      <div :style="{ transform: `translateY(${offsetY}px)` }">
-        <slot v-for="item in visibleItems" :key="item.index" :item="item.data" :index="item.index" />
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts" generic="T">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 const props = withDefaults(defineProps<{
   items: T[]
   itemHeight: number
   containerHeight: number
   overscan?: number
+  /** Index (into `items`) that should always be kept in view. */
+  activeIndex?: number
 }>(), {
   overscan: 3,
+  activeIndex: -1,
 })
 
 const containerEl = ref<HTMLElement>()
 const scrollTop = ref(0)
+
+function scrollIndexIntoView(index: number) {
+  if (index < 0) return
+  const el = containerEl.value
+  if (!el) return
+  const top = index * props.itemHeight
+  const bottom = top + props.itemHeight
+  if (top < el.scrollTop) {
+    el.scrollTop = top
+  } else if (bottom > el.scrollTop + props.containerHeight) {
+    el.scrollTop = bottom - props.containerHeight
+  }
+}
+
+watch(() => props.activeIndex, (i) => {
+  nextTick(() => scrollIndexIntoView(i))
+})
 
 const totalHeight = computed(() => props.items.length * props.itemHeight)
 
@@ -55,3 +65,13 @@ watch(() => props.items, () => {
 
 defineExpose({ containerEl })
 </script>
+
+<template>
+  <div ref="containerEl" class="vcp-virtual" :style="{ height: containerHeight + 'px', overflowY: 'auto' }" @scroll.passive="onScroll">
+    <div :style="{ height: totalHeight + 'px', position: 'relative' }">
+      <div :style="{ transform: `translateY(${offsetY}px)` }">
+        <slot v-for="item in visibleItems" :key="item.index" :item="item.data" :index="item.index" />
+      </div>
+    </div>
+  </div>
+</template>

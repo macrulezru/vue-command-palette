@@ -6,6 +6,10 @@ function fireKey(key: string, opts: Partial<KeyboardEventInit> = {}) {
   document.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...opts }))
 }
 
+function fireKeyOn(target: HTMLElement, key: string, opts: Partial<KeyboardEventInit> = {}) {
+  target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, ...opts }))
+}
+
 describe('createKeyboardManager', () => {
   let km: ReturnType<typeof createKeyboardManager>
 
@@ -89,5 +93,54 @@ describe('createKeyboardManager', () => {
     km.start()
     fireKey('k', { metaKey: true })
     expect(handler).toHaveBeenCalledOnce()
+  })
+
+  describe('typing in editable targets', () => {
+    let input: HTMLInputElement
+
+    beforeEach(() => {
+      input = document.createElement('input')
+      document.body.appendChild(input)
+    })
+
+    afterEach(() => {
+      input.remove()
+    })
+
+    it('does not fire bare-key sequences while typing in an input', () => {
+      vi.useFakeTimers()
+      const handler = vi.fn()
+      km.registerShortcut(['g', 'h'], handler)
+      fireKeyOn(input, 'g')
+      fireKeyOn(input, 'h')
+      expect(handler).not.toHaveBeenCalled()
+    })
+
+    it('still fires Ctrl/Meta hotkeys while typing in an input', () => {
+      const handler = vi.fn()
+      km.registerShortcut(['$mod', 'k'], handler)
+      fireKeyOn(input, 'k', { metaKey: true })
+      expect(handler).toHaveBeenCalledOnce()
+    })
+
+    it('does not fire a plain-key hotkey while typing in an input', () => {
+      const handler = vi.fn()
+      km.registerShortcut(['k'], handler)
+      fireKeyOn(input, 'k')
+      expect(handler).not.toHaveBeenCalled()
+    })
+
+    it('ignores sequences in a contenteditable element', () => {
+      vi.useFakeTimers()
+      const div = document.createElement('div')
+      div.setAttribute('contenteditable', 'true')
+      document.body.appendChild(div)
+      const handler = vi.fn()
+      km.registerShortcut(['g', 'h'], handler)
+      fireKeyOn(div, 'g')
+      fireKeyOn(div, 'h')
+      expect(handler).not.toHaveBeenCalled()
+      div.remove()
+    })
   })
 })

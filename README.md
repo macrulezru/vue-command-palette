@@ -33,7 +33,21 @@ Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped comma
 - [Confirmation step](#confirmation-step)
 - [Async search](#async-search)
 - [Recent commands](#recent-commands)
+- [Preview pane](#preview-pane)
+- [Mobile / touch](#mobile--touch)
+- [Pinned commands](#pinned-commands)
+- [Secondary actions](#secondary-actions)
+- [Multi-select](#multi-select)
+- [Query history](#query-history)
+- [Frecency](#frecency)
+- [Modes / scopes](#modes--scopes)
+- [Typed command data](#typed-command-data)
+- [Custom search strategy](#custom-search-strategy)
+- [Binding shortcuts](#binding-shortcuts)
+- [Command pages](#command-pages)
+- [Multiple instances](#multiple-instances)
 - [Theming](#theming)
+- [Localization](#localization)
 - [Nuxt](#nuxt)
 - [Testing utilities](#testing-utilities)
 - [TypeScript types](#typescript-types)
@@ -45,7 +59,12 @@ Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped comma
 
 ## Features
 
-- **Fuzzy search** — ranking: exact (100) › prefix (80) › substring (60) › fuzzy (1–40). Diacritic normalization so `café` matches `cafe`. Match highlighting via `<mark>` spans.
+- **Fuzzy search** — ranking: exact (100) › prefix (80) › substring (60) › fuzzy (1–40). Searches label, `description`, `keywords` and `aliases`; label highlighting is preserved even when another field wins the score. Diacritic normalization so `café` matches `cafe`. Match highlighting via `<mark>` spans.
+- **Pluggable search** — swap the built-in scorer for your own (e.g. Fuse.js) via the `search` option.
+- **Bindable shortcuts** — `bindShortcuts: true` turns each command's `shortcut` into a real global hotkey.
+- **Searchable nested commands** — sub-commands surface directly in search with breadcrumb context (`Change Theme › Light`); a `›` chevron marks items that open a sub-palette/page.
+- **Command pages** — a command can open a `page` with its own placeholder and async search (filters, remote pickers, multi-step flows).
+- **Multiple instances** — run several independent, named palettes on one app via `createCommandPalette()`.
 - **All-commands view** — palette shows all registered commands grouped on open; no empty screen.
 - **Grouped commands** — groups with headers, priority ordering, and visual section dividers.
 - **Recent commands** — `localStorage`-backed history of the last N executed commands shown at the top when the query is empty.
@@ -63,7 +82,7 @@ Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped comma
 - **Nuxt module** — auto-installs the plugin via `nuxt.config.ts`.
 - **Testing utilities** — `createPaletteContext` + `PaletteProvider` for isolated unit tests.
 - **SSR-safe** — all browser API calls guarded with `typeof document !== 'undefined'`.
-- **Zero runtime dependencies** — only Vue 3 as peer dep. ≤ 10 KB gzip.
+- **Zero runtime dependencies** — only Vue 3 as peer dep. ~11 KB gzip.
 
 ---
 
@@ -162,6 +181,7 @@ The root component. Renders a modal overlay with a search input, result list, an
 
 | Prop | Type | Default | Description |
 |---|---|---|---|
+| `name` | `string` | — | Target a specific named palette instance (default singleton when omitted) |
 | `placeholder` | `string` | `'Search commands…'` | Input placeholder text |
 | `maxResults` | `number` | `10` | Maximum number of results shown |
 | `emptyText` | `string` | `'No commands found.'` | Text shown when search returns nothing |
@@ -169,6 +189,18 @@ The root component. Renders a modal overlay with a search input, result list, an
 | `teleportTo` | `string` | `'body'` | CSS selector for the `<Teleport>` target |
 | `theme` | `'default' \| 'compact'` | `'default'` | Compact uses a narrower, shorter dialog |
 | `animationDuration` | `number` | `150` | Fade transition duration in ms |
+| `labels` | `Partial<PaletteLabels>` | — | Override built-in UI strings (i18n) — see [Localization](#localization) |
+| `groupRecent` | `boolean` | `false` | Cluster recent commands by their `group` with sub-headers |
+| `modes` | `PaletteMode[]` | — | Prefix-activated search scopes (see [Modes / scopes](#modes--scopes)) |
+| `selectable` | `boolean` | `false` | Multi-select mode (see [Multi-select](#multi-select)) |
+| `preview` | `boolean` | `false` | Show a preview pane for the active command (see [Preview pane](#preview-pane)) |
+| `previewHotkey` | `string[]` | `['$mod', 'i']` | Key combo to toggle the preview pane (`[]` to disable) |
+
+### Emits
+
+| Event | Payload | Description |
+|---|---|---|
+| `submit-selection` | `Command[]` | Emitted on `$mod+Enter` in [multi-select](#multi-select) mode |
 
 ### Slots
 
@@ -177,9 +209,11 @@ The root component. Renders a modal overlay with a search input, result list, an
 | `#trigger` | `{ open, toggle }` | Custom element that opens the palette |
 | `#header` | — | Content inserted above the search input |
 | `#input` | `{ query, onInput }` | Replace the default `<input>` entirely |
-| `#item` | `{ command, active, matches }` | Replace the entire result row |
+| `#item` | `{ command, active, matches, parents, matchedText }` | Replace the entire result row (`parents` = breadcrumb context; `matchedText` = matching keyword/alias) |
 | `#group-header` | `{ group }` | Replace the group label row |
 | `#empty` | `{ query }` | Shown when the query returns no results |
+| `#actions` | `{ command, run, activeIndex, close }` | Replace the secondary-actions menu |
+| `#preview` | `{ command }` | Preview pane content for the active command (requires `preview` prop) |
 | `#footer` | — | Content below the result list |
 
 ### Custom `#item` slot
@@ -274,7 +308,7 @@ Renders a group header followed by its `CommandItem` rows. Passes all `#item`, `
 
 ## useCommandPalette
 
-Composable that exposes the global palette state and all control functions. Must be called inside a component tree where `VCommandPalettePlugin` is installed.
+Composable that exposes the global palette state and all control functions. Must be called inside a component tree where `VCommandPalettePlugin` is installed. Pass an instance name — `useCommandPalette('sidebar')` — to target a [named instance](#multiple-instances).
 
 ```ts
 import { useCommandPalette } from '@macrulez/vue-command-palette'
@@ -294,9 +328,13 @@ const {
   executeCommand,    // (cmd: Command) => Promise<void>
   executeActive,     // () => Promise<void> — run the currently selected result
   getRecentCommands, // () => Command[]
+  getPinnedCommands, // () => Command[]
   registerCommands,  // (commands: Command[]) => () => void
   registerGroup,     // (group: CommandGroup) => () => void
   addRecent,         // (id: string) => void
+  pin, unpin, togglePin, isPinned,  // pinned commands API
+  pinnedIds,         // Readonly<Ref<string[]>>
+  queryHistory,      // Readonly<Ref<string[]>>
 } = useCommandPalette()
 ```
 
@@ -386,8 +424,15 @@ app.use(VCommandPalettePlugin, options)
 
 | Option | Type | Default | Description |
 |---|---|---|---|
+| `name` | `string` | `'default'` | Instance name (see [Multiple instances](#multiple-instances)) |
 | `hotkey` | `string[]` | `['$mod', 'k']` | Key combination to toggle the palette |
 | `colorTheme` | `'light' \| 'dark' \| 'system'` | `'system'` | Initial color theme of the palette |
+| `search` | `SearchFn` | built-in fuzzy | Custom search strategy (see [Custom search](#custom-search-strategy)) |
+| `searchNested` | `boolean` | `true` | Surface nested `subCommands` in search results with breadcrumb context |
+| `showDisabled` | `boolean` | `false` | Show disabled commands (greyed, non-executable, demoted) instead of hiding them |
+| `frecency` | `boolean` | `false` | Boost frequently & recently used commands in the ranking (see [Frecency](#frecency)) |
+| `onSearch` | `(query) => Command[] \| Promise<Command[]>` | — | Plugin-level async data source merged into every query (see [Async search](#async-search)) |
+| `bindShortcuts` | `boolean` | `false` | Auto-register each command's `shortcut` as a global hotkey |
 | `persistRecent` | `boolean` | `true` | Persist recent commands to `localStorage` |
 | `maxRecent` | `number` | `5` | Maximum total recent commands stored |
 | `maxRecentPerGroup` | `number` | `0` | Max recent per group (`0` = unlimited) |
@@ -395,6 +440,7 @@ app.use(VCommandPalettePlugin, options)
 | `onOpen` | `() => void` | — | Called every time the palette opens |
 | `onClose` | `() => void` | — | Called every time the palette closes |
 | `onError` | `(err: unknown, command: Command) => void` | — | Called when `perform()` throws |
+| `onHighlight` | `(command: Command \| null) => void` | — | Called when the keyboard-active command changes (previews/analytics) |
 
 ### Example with all options
 
@@ -429,7 +475,7 @@ shortcut: ['$mod', 'shift', 'p']  // Cmd+Shift+P on Mac, Ctrl+Shift+P on Windows
 ## Command type
 
 ```ts
-interface Command {
+interface Command<T = unknown> {
   id: string                           // unique identifier
   label: string                        // display text, searched by fuzzy engine
   description?: string                 // subtitle shown below the label
@@ -439,9 +485,29 @@ interface Command {
   shortcut?: string[]                  // display-only hint: ['$mod', 'k']
   disabled?: boolean                   // permanently unavailable
   enabled?: () => boolean              // dynamically disable — evaluated on each render
+  disabledReason?: string              // tooltip shown when the command is disabled
+  badge?: string | { text: string; color?: string }  // small label (e.g. "New", "Pro")
   confirm?: string                     // prompt shown before execute
   perform: () => void | Promise<void>  // action; may be async
   subCommands?: Command[]              // opens a nested palette when selected
+  page?: CommandPage                   // opens a page with its own input/async search
+  actions?: CommandAction[]            // secondary actions, opened with Tab
+  info?: string                        // text/HTML shown in the preview pane (v-html)
+  data?: T                             // type-safe payload (see Typed command data)
+}
+
+interface CommandAction {
+  id: string
+  label: string
+  icon?: Component | string
+  shortcut?: string[]                  // display-only hint
+  perform: () => void | Promise<void>
+}
+
+interface CommandPage {
+  placeholder?: string                                       // input placeholder on the page
+  items?: Command[]                                          // static items (empty query)
+  onSearch?: (query: string) => Command[] | Promise<Command[]>  // query-driven results (debounced)
 }
 ```
 
@@ -472,6 +538,11 @@ const results = fuzzySearch('git cm', commands)
 // Render highlighted label in a custom slot
 const vnode = highlightMatches(command.label, result.matches)
 // returns a VNode: <span>git <mark class="vcp-match">c</mark>o<mark class="vcp-match">m</mark>mit</span>
+
+// Highlight ranges for results that came from an external source
+// (async groups, pages, modes — these are already highlighted internally):
+import { getMatchRanges } from '@macrulez/vue-command-palette'
+const ranges = getMatchRanges('al', 'Alan Turing') // → [[0, 1]]
 ```
 
 ### Scoring table
@@ -491,9 +562,11 @@ The engine checks `label`, all `keywords[]`, and all `aliases[]`. The highest sc
 Strings are normalized with `NFD` Unicode decomposition before comparison, so accents are ignored:
 
 ```ts
-fuzzySearch('cafe',  [{ id: '1', label: 'Café',   perform: () => {} }])  // → match
-fuzzySearch('strase',[{ id: '2', label: 'Straße', perform: () => {} }])  // → match
+fuzzySearch('cafe',   [{ id: '1', label: 'Café',   perform: () => {} }])  // → match
+fuzzySearch('muller', [{ id: '2', label: 'Müller', perform: () => {} }])  // → match
 ```
+
+> Only diacritics are stripped (`é` → `e`, `ü` → `u`). Letters that have no canonical decomposition — such as `ß` — are left as-is, so `ß` does **not** match `ss`.
 
 ---
 
@@ -589,6 +662,10 @@ Add `subCommands` to any command to open a child palette when it is selected. Th
 
 Sub-palettes can be nested to any depth.
 
+### Nested commands are searchable
+
+By default (`searchNested: true`), typing a query also matches commands **inside** `subCommands`, so searching `light` surfaces the actual *Light* command — not just its *Change Theme* parent. Such results are shown with a breadcrumb context (`Change Theme › Light`) via `SearchResult.parents`, and selecting one runs it directly. Commands that open a sub-palette or page show a `›` chevron affordance. Set `searchNested: false` to restrict search to top-level commands only.
+
 **Navigation keys inside a sub-palette:**
 
 | Key | Action |
@@ -648,15 +725,19 @@ useRegisterGroup({
 ```
 
 - Debounced by **200 ms** to avoid excessive requests
-- A loading indicator appears while the request is in flight
+- An unobtrusive spinner appears in the input corner while the request is in flight — already-shown results stay visible (no blanking). The centered loading text only appears when there is nothing to show yet.
 - Async results are merged with sync results and re-sorted by score
 - Empty query clears async results immediately (no debounce)
+- A **plugin-level** `onSearch` option provides one global async source (not tied to a group), merged the same way:
+  ```ts
+  app.use(VCommandPalettePlugin, { onSearch: (q) => api.search(q) })
+  ```
 
 ---
 
 ## Recent commands
 
-When `persistRecent: true` (the default), each executed command's ID is written to `localStorage`. On open with an empty query, recent commands appear above all other commands.
+Recent commands are always tracked in memory for the current session and shown above all other commands when the palette opens with an empty query. When `persistRecent: true` (the default), the list is additionally written to `localStorage` so it survives reloads; setting `persistRecent: false` keeps recent working for the session without touching `localStorage`.
 
 ```ts
 app.use(VCommandPalettePlugin, {
@@ -702,6 +783,8 @@ The palette is fully styled via CSS custom properties. Import the default styles
   --vcp-dialog-radius: 8px;
   --vcp-dialog-shadow: 0 16px 70px rgba(0, 0, 0, 0.2);
   --vcp-dialog-width: 560px;
+  --vcp-dialog-preview-width: 860px;
+  --vcp-preview-width: 300px;
   --vcp-dialog-max-height: 60vh;
   --vcp-dialog-padding-top: 15vh;
 
@@ -777,6 +860,291 @@ colorTheme.value = 'dark'
 ```
 
 `'system'` follows `prefers-color-scheme`. Selecting `'light'` or `'dark'` applies `.vcp-theme-light` / `.vcp-theme-dark` on the overlay, which override the media query.
+
+---
+
+## Frecency
+
+With `frecency: true`, the palette tracks how often and how recently each command is executed and adds a bonus to its search score, so your most-used commands float to the top. Stats are kept in memory and (when `persistRecent` is on) persisted to `localStorage` under `<localStorageKey>:frecency`.
+
+```ts
+app.use(VCommandPalettePlugin, { frecency: true })
+```
+
+The bonus combines frequency (run count) with recency (decays over ~30 days), and never hides a strong exact/prefix match — it only reorders comparable results.
+
+---
+
+## Modes / scopes
+
+Define prefix-activated scopes (like VS Code's `>` commands or `@` symbols). When the query starts with a mode's `prefix`, the prefix is stripped, the placeholder switches, a chip appears, and results come from the mode's `onSearch` (or, if omitted, the regular fuzzy search over the stripped query).
+
+```vue
+<CommandPalette
+  :modes="[
+    { prefix: '>', label: 'Run', placeholder: 'Run a command…', onSearch: searchCommands },
+    { prefix: '@', label: 'People', placeholder: 'Find a person…', onSearch: searchPeople },
+  ]"
+/>
+```
+
+```ts
+type PaletteMode = {
+  prefix: string
+  placeholder?: string
+  label?: string
+  onSearch?: (query: string) => Command[] | Promise<Command[]>
+}
+```
+
+`Backspace` over the prefix exits the mode. Results are debounced 200 ms.
+
+---
+
+## Preview pane
+
+Set `preview` to show a right-hand panel for the active command — great for details, docs, or thumbnails. It updates as the selection changes (it pairs naturally with the `onHighlight` option for async previews). On narrow screens the pane is hidden automatically.
+
+Two sources fill the pane, in order:
+
+1. The `#preview` slot — `{ command }` scope, full control over the markup.
+2. The active command's **`info`** field (plain text or HTML) — rendered after the slot. Handy when you don't need a custom slot.
+
+```vue
+<CommandPalette preview>
+  <template #preview="{ command }">
+    <div v-if="command">
+      <h3>{{ command.label }}</h3>
+      <p>{{ command.description }}</p>
+    </div>
+  </template>
+</CommandPalette>
+```
+
+```ts
+useRegisterCommands([
+  {
+    id: 'analytics',
+    label: 'Open Analytics',
+    info: '<p>Traffic, conversions and revenue charts.</p>',  // text or HTML
+    perform: () => {},
+  },
+])
+```
+
+> **Security:** `info` is rendered with `v-html`. Only pass trusted/sanitised markup.
+
+### Toggling the pane
+
+- A **sidebar icon** appears next to the theme switcher to expand/collapse the pane.
+- The `previewHotkey` prop sets a keyboard toggle (default `['$mod', 'i']` → ⌘/Ctrl + I; pass `[]` to disable).
+- Opening/closing animates the pane's **width** in sync with the dialog width, so the list stays a constant width and there's no jump; respects `prefers-reduced-motion`.
+
+The dialog only widens to `--vcp-dialog-preview-width` (default `860px`) while the pane is **expanded** — when it's collapsed (or `preview` is off) the dialog returns to the normal `--vcp-dialog-width` (`560px`). The pane is `--vcp-preview-width` wide (default `300px`); keep `dialog-preview-width − dialog-width = preview-width` for a perfectly steady list during the animation.
+
+---
+
+## Mobile / touch
+
+The palette is responsive out of the box: on viewports ≤ 640px the dialog goes full-width with larger (48px) touch targets, the preview pane is hidden, and hover styles are disabled on touch devices. Inside a nested palette/page, **swipe right** to go back.
+
+---
+
+## Pinned commands
+
+Users can pin any command to a **Pinned** section shown above *Recent* in the empty-query view. Toggle a pin with `$mod+P` on the active item, by **clicking the pin icon** on the row (it appears as a ghost on hover / keyboard-active rows, and stays lit on pinned commands — clicking it never runs the command), or via the composable API. Pins persist to `localStorage` (`<localStorageKey>:pinned`) when `persistRecent` is on.
+
+```ts
+const { pin, unpin, togglePin, isPinned, getPinnedCommands, pinnedIds } = useCommandPalette()
+```
+
+---
+
+## Secondary actions
+
+A command can expose secondary `actions` (open, copy, delete, …). Press `Tab` on the active item to open the actions menu; arrows navigate, `Enter` runs, and `Esc` / `Tab` / `Backspace` (or the **‹ Back** button in the header) returns to the list. Customise the menu with the `#actions` slot (`{ command, run, activeIndex, close }`).
+
+```ts
+useRegisterCommands([
+  {
+    id: 'export',
+    label: 'Export data',
+    perform: () => download(),
+    actions: [
+      { id: 'copy', label: 'Copy as JSON', perform: () => copyJson() },
+      { id: 'mail', label: 'Email export', shortcut: ['$mod', 'm'], perform: () => email() },
+    ],
+  },
+])
+```
+
+Items with actions show a `⋯` affordance.
+
+---
+
+## Multi-select
+
+With `selectable`, the palette becomes a multi-picker: `Enter` (or click) toggles the active item, `$mod+Enter` submits. Selected rows show a checkbox.
+
+```vue
+<CommandPalette selectable @submit-selection="onPicked" />
+```
+
+```ts
+function onPicked(commands: Command[]) {
+  // do something with the chosen commands
+}
+```
+
+---
+
+## Query history
+
+Recently submitted queries are remembered for the session. With an empty or any input, press `Alt+ArrowUp` / `Alt+ArrowDown` to cycle through previous queries (most recent first). Exposed read-only as `useCommandPalette().queryHistory`.
+
+---
+
+## Custom search strategy
+
+Replace the built-in fuzzy engine with any scorer — for example [Fuse.js](https://fusejs.io). The function receives the query and all available commands and returns ranked `SearchResult[]` (highest score first). The store still assigns `groupId` to each result afterwards.
+
+```ts
+import Fuse from 'fuse.js'
+import type { SearchFn } from '@macrulez/vue-command-palette'
+
+const fuseSearch: SearchFn = (query, commands) => {
+  const fuse = new Fuse(commands, { keys: ['label', 'description', 'keywords'], includeScore: true })
+  return fuse.search(query).map(r => ({
+    command: r.item,
+    score: 1 - (r.score ?? 0),
+    matches: [],
+  }))
+}
+
+app.use(VCommandPalettePlugin, { search: fuseSearch })
+```
+
+---
+
+## Binding shortcuts
+
+By default `shortcut` is a display-only hint. Set `bindShortcuts: true` and each command's `shortcut` becomes a real global hotkey that runs the command through the same flow as clicking it (confirm dialogs and pages included). Shortcuts are registered and cleaned up automatically as commands are added and removed.
+
+```ts
+app.use(VCommandPalettePlugin, { bindShortcuts: true })
+
+useRegisterCommands([
+  { id: 'save', label: 'Save', shortcut: ['$mod', 's'], perform: () => save() },
+  { id: 'find', label: 'Find', shortcut: ['$mod', 'f'], perform: () => openFind() },
+])
+```
+
+---
+
+## Command pages
+
+A command can open a **page** instead of (or in addition to) running. A page is like a nested palette, but with its own placeholder and an async `onSearch` handler driven by the input — ideal for remote pickers and filters.
+
+```ts
+useRegisterCommands([
+  {
+    id: 'assign-user',
+    label: 'Assign to user…',
+    icon: '👤',
+    perform: () => {},  // not called — the page opens instead
+    page: {
+      placeholder: 'Search users…',
+      // items: [...]   // optional static items shown on empty query
+      onSearch: async (query) => {
+        const users = await api.searchUsers(query)
+        return users.map(u => ({
+          id: `user-${u.id}`,
+          label: u.name,
+          description: u.email,
+          perform: () => assign(u.id),
+        }))
+      },
+    },
+  },
+])
+```
+
+`Backspace` (empty input) / `Esc` navigate back, exactly like sub-palettes. Results are debounced 200 ms; if `onSearch` is omitted, the page filters its static `items` by the query.
+
+---
+
+## Multiple instances
+
+Run several independent palettes on one app — e.g. a global command bar plus a sidebar search — each with its own hotkey, commands and state. Use `createCommandPalette()` for every instance beyond the default (it returns a fresh plugin object so Vue's `app.use` de-duplication doesn't skip it).
+
+```ts
+import { VCommandPalettePlugin, createCommandPalette } from '@macrulez/vue-command-palette'
+
+app.use(VCommandPalettePlugin)                                   // default instance
+app.use(createCommandPalette({ name: 'sidebar', hotkey: ['$mod', 'j'] }))
+```
+
+```vue
+<template>
+  <!-- default -->
+  <CommandPalette />
+  <!-- sidebar -->
+  <CommandPalette name="sidebar" placeholder="Search the sidebar…" />
+</template>
+```
+
+Target a specific instance from composables via the `name` argument:
+
+```ts
+const sidebar = useCommandPalette('sidebar')
+useRegisterCommands([/* … */], 'sidebar')
+useRegisterGroup({ /* … */ }, 'sidebar')
+```
+
+---
+
+## Localization
+
+Built-in UI strings (the *Recent* header, confirm dialog buttons, theme-switcher titles, ARIA labels) can be overridden via the `labels` prop. Only the keys you pass are overridden; the rest fall back to the English defaults.
+
+```vue
+<CommandPalette
+  placeholder="Поиск команд…"
+  empty-text="Ничего не найдено."
+  loading-text="Загрузка…"
+  :labels="{
+    recent: 'Недавние',
+    confirmYes: 'Да, продолжить',
+    confirmCancel: 'Отмена',
+    themeLight: 'Светлая тема',
+    themeDark: 'Тёмная тема',
+    themeSystem: 'Системная тема',
+    dialogLabel: 'Палитра команд',
+    loading: 'Загрузка',
+  }"
+/>
+```
+
+### `PaletteLabels`
+
+| Key | Default | Where it appears |
+|---|---|---|
+| `recent` | `'Recent'` | Header above recent commands (empty query) |
+| `pinned` | `'Pinned'` | Header above pinned commands (empty query) |
+| `pin` / `unpin` | `'Pin'` / `'Unpin'` | `title` of the per-row pin icon |
+| `actions` | `'Actions'` | Header of the secondary-actions menu |
+| `back` | `'Back'` | "Back" affordance (actions menu) |
+| `togglePreview` | `'Toggle preview panel'` | `title`/`aria-label` of the preview toggle button |
+| `confirmYes` | `'Yes, proceed'` | Confirm dialog — proceed button |
+| `confirmCancel` | `'Cancel'` | Confirm dialog — cancel button |
+| `themeLight` | `'Light theme'` | Theme switcher button title |
+| `themeDark` | `'Dark theme'` | Theme switcher button title |
+| `themeSystem` | `'System theme'` | Theme switcher button title |
+| `dialogLabel` | `'Command palette'` | `aria-label` of the dialog |
+| `loading` | `'Loading'` | `aria-label` of the per-item spinner |
+| `resultsCount` | `(n) => '… results available'` | `aria-live` announcement of the result count (a function) |
+
+> Note: `placeholder`, `emptyText` and `loadingText` remain separate props on `CommandPalette`.
 
 ---
 
@@ -898,6 +1266,36 @@ const {
 
 ---
 
+## Typed command data
+
+Attach an arbitrary, type-safe payload to commands via the generic `Command<T>` and its `data` field. `useRegisterCommands<T>` / `useRegisterGroup<T>`, `fuzzySearch<T>`, `SearchResult<T>` and `SearchFn<T>` all carry the type through, so you get full inference (and errors on mismatches). It defaults to `unknown`, so existing untyped usage is unaffected.
+
+```ts
+interface UserData { id: number; email: string }
+
+useRegisterCommands<UserData>([
+  {
+    id: 'user-ada',
+    label: 'Ada Lovelace',
+    data: { id: 1, email: 'ada@example.com' },  // checked against UserData
+    perform: () => {},
+  },
+])
+
+// Standalone search keeps the type:
+const results = fuzzySearch<UserData>('ada', commands)
+results[0].command.data?.email  // string | undefined
+```
+
+```ts
+// @ts-expect-error — data must match UserData
+const bad: Command<UserData> = { id: 'x', label: 'X', data: { wrong: true }, perform: () => {} }
+```
+
+> Inside the `#item` / `#preview` slots the `command` is typed as `Command` (`data: unknown`) since the palette stores commands of mixed types — narrow with a cast or a type guard when you need the payload there.
+
+---
+
 ## TypeScript types
 
 All public types are exported from the package root:
@@ -906,9 +1304,14 @@ All public types are exported from the package root:
 import type {
   Command,
   CommandGroupType,  // group definition — NOT the CommandGroup component
-  CommandSection,
-  SearchResult,      // { command, score, matches, groupId? }
+  CommandAction,     // secondary action on a command
+  CommandPage,       // page opened by a command (placeholder + async onSearch)
+  SearchResult,      // { command, score, matches, groupId?, parents?, matchedField? }
+  SearchFn,          // custom search strategy signature
+  PaletteMode,       // prefix-activated scope
+  CommandUsage,      // frecency stat { count, lastUsed }
   PaletteOptions,
+  PaletteLabels,     // customisable UI strings (i18n)
   PaletteContext,
   PaletteState,
   CommandStore,
@@ -926,6 +1329,9 @@ interface SearchResult {
   score: number
   matches: Array<[start: number, end: number]>
   groupId?: string
+  parents?: Command[]  // ancestor chain when the result is a nested sub-command
+  matchedField?: 'label' | 'description' | 'keyword' | 'alias'  // which field won the score
+  matchedText?: string                                          // matching keyword/alias text
 }
 ```
 
@@ -969,7 +1375,7 @@ interface PaletteContext {
 | `role="option"` | Applied to each `CommandItem` |
 | `aria-selected` | Set to `true` on the currently active item |
 | `aria-disabled` | Set when `disabled: true` or `enabled()` returns `false` |
-| `aria-live="polite"` | Breadcrumb — screen readers announce sub-palette navigation |
+| `aria-live="polite"` | Breadcrumb — screen readers announce sub-palette navigation; a visually-hidden region also announces the result count (`labels.resultsCount`) |
 | Focus trap | `Tab` is intercepted to keep focus inside the dialog |
 | Scroll lock | `document.body.style.overflow` is set to `hidden` while open |
 | Reduced motion | `@media (prefers-reduced-motion: reduce)` disables the fade transition |
@@ -1004,7 +1410,7 @@ typeof navigator !== 'undefined' && navigator.platform.includes('Mac')
 | `@macrulez/vue-command-palette/testing` | `vue ^3.3` | `createPaletteContext` + `PaletteProvider`; dev/test only |
 | `@macrulez/vue-command-palette/nuxt` | `nuxt ^3`, `vue ^3.3` | Nuxt auto-plugin |
 
-Ships as tree-shakeable ESM (`dist/@macrulez/vue-command-palette.js`) + CJS (`dist/@macrulez/vue-command-palette.cjs`). Core bundle without styles is ≤ 10 KB gzip.
+Ships as tree-shakeable ESM (`dist/@macrulez/vue-command-palette.js`) + CJS (`dist/@macrulez/vue-command-palette.cjs`). Core bundle without styles is ~11 KB gzip; the stylesheet is ~2 KB gzip.
 
 ---
 
@@ -1020,7 +1426,7 @@ Danil Lisin Vladimirovich aka Macrulez
 
 GitHub: [macrulezru](https://github.com/macrulezru) · Website: [macrulez.ru/en](https://macrulez.ru/en)
 
-Bugs and questions — [issues](https://github.com/macrulezru/@macrulez/vue-command-palette/issues)
+Bugs and questions — [issues](https://github.com/macrulezru/vue-command-palette/issues)
 
 ---
 
