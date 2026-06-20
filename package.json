@@ -1,22 +1,37 @@
 {
   "name": "@macrulez/vue-command-palette",
-  "version": "0.2.0",
-  "description": "Command+K palette for Vue 3 — headless, fuzzy search, keyboard navigation, nested palettes",
+  "version": "0.2.1",
+  "description": "Headless Command+K palette for Vue 3 with fuzzy search, grouped and nested commands, keyboard navigation and async search.",
+  "author": "macrulez <macrulezru@gmail.com> (https://macrulez.ru/en)",
+  "homepage": "https://github.com/macrulezru/vue-command-palette#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macrulezru/vue-command-palette.git"
+  },
+  "bugs": {
+    "url": "https://github.com/macrulezru/vue-command-palette/issues"
+  },
   "type": "module",
   "main": "./dist/vue-command-palette.cjs",
   "module": "./dist/vue-command-palette.js",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/vue-command-palette.js",
-      "require": "./dist/vue-command-palette.cjs",
-      "types": "./dist/index.d.ts"
+      "require": "./dist/vue-command-palette.cjs"
     }
   },
   "types": "./dist/index.d.ts",
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "vite build",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
@@ -70,7 +85,9 @@
     "command-palette",
     "command-k",
     "fuzzy-search",
-    "headless"
+    "keyboard-navigation",
+    "headless",
+    "typescript"
   ],
   "license": "MIT",
   "publishConfig": {
