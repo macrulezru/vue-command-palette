@@ -42,13 +42,17 @@ export default tseslint.config(
     },
     rules: {
       'vue/one-component-per-file': 'off',
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
     },
   },
 
-  // Nuxt plugin uses the #app virtual import, only resolvable inside a Nuxt project
+  // Nuxt module/plugin use @nuxt/kit generics and the #imports virtual import,
+  // only fully resolvable inside a real Nuxt project
   {
-    files: ['src/nuxt.ts'],
+    files: ['src/nuxt/module.ts', 'src/nuxt/runtime/plugin.ts'],
     rules: {
       '@typescript-eslint/ban-ts-comment': 'off',
     },
@@ -59,7 +63,10 @@ export default tseslint.config(
     files: ['src/**/*.{ts,vue}'],
     rules: {
       // Allow unused vars prefixed with _
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       // Allow any in internal type casts
       '@typescript-eslint/no-explicit-any': 'warn',
       // Vue specific

@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/vue-command-palette",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Headless Command+K palette for Vue 3 with fuzzy search, grouped and nested commands, keyboard navigation and async search.",
   "author": "macrulez <macrulezru@gmail.com> (https://macrulez.ru/en)",
   "homepage": "https://github.com/macrulezru/vue-command-palette#readme",
@@ -19,7 +19,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/vue-command-palette.js",
       "require": "./dist/vue-command-palette.cjs"
-    }
+    },
+    "./nuxt": {
+      "types": "./dist/nuxt/module.d.ts",
+      "import": "./dist/nuxt/module.js",
+      "require": "./dist/nuxt/module.cjs"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js",
+      "require": "./dist/testing.cjs"
+    },
+    "./style.css": "./dist/style.css"
   },
   "types": "./dist/index.d.ts",
   "engines": {
@@ -32,7 +43,7 @@
   ],
   "scripts": {
     "prepublishOnly": "npm run build",
-    "build": "vite build",
+    "build": "vite build && node -e \"require('fs').copyFileSync('src/style.css','dist/style.css')\"",
     "dev": "vite build --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint \"src/**/*.{ts,vue}\"",
@@ -55,10 +66,17 @@
     ]
   },
   "peerDependencies": {
+    "@nuxt/kit": ">=3.0.0",
     "vue": "^3.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@nuxt/kit": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@nuxt/kit": "^4.5.2",
     "@vitejs/plugin-vue": "^5.0.0",
     "@vitest/coverage-v8": "^4.1.7",
     "@vue/test-utils": "^2.4.10",
