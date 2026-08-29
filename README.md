@@ -1,6 +1,6 @@
-# **Color Value Tools**
+# **Command Palette**
 
-![Color Value Tools](https://github.com/macrulezru/assets/blob/master/packages-images/css-magic-gradient.png?raw=true)
+![Color Value Tools](https://github.com/macrulezru/assets/blob/master/packages-images/vue-command-palette.png?raw=true)
 
 Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped commands, nested sub-palettes, global keyboard shortcuts, async search, confirmation dialogs, recent command history, and full headless customisation via slots — all with a single peer dependency (Vue 3).
 
