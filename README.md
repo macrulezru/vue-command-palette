@@ -101,6 +101,74 @@ useRegisterGroup({
 
 Press **Cmd+K** / **Ctrl+K** to open.
 
+### More examples
+
+#### Two-key navigation, GitHub-style
+
+Two bare keys in a row, no modifier — `g`, then `h` — within a 500ms window. `registerShortcut` parses sequences like this itself.
+
+```ts
+import { createKeyboardManager } from '@macrulez/vue-command-palette'
+
+const km = createKeyboardManager()
+km.start()
+
+km.registerShortcut(['g', 'h'], () => router.push('/home'))
+km.registerShortcut(['g', 'p'], () => router.push('/projects'))
+km.registerShortcut(['g', 's'], () => router.push('/settings'))
+
+// Two bare keys, no modifier, pressed within a 500ms window — the same
+// "g then h" navigation pattern as GitHub's own keyboard shortcuts.
+```
+
+#### Nested palettes are searchable directly
+
+`subCommands` opens a child palette on selection, and a query like "light" finds the command inside it right away — with a "Change Theme › Light" breadcrumb, no need to open the submenu first.
+
+```ts
+const changeTheme = {
+  id: 'change-theme',
+  label: 'Change Theme',
+  icon: '🎨',
+  subCommands: [
+    { id: 'theme-light', label: 'Light', icon: '☀️', perform: () => (theme.value = 'light') },
+    { id: 'theme-dark', label: 'Dark', icon: '🌙', perform: () => (theme.value = 'dark') },
+    { id: 'theme-system', label: 'System', icon: '💻', perform: () => (theme.value = 'system') },
+  ],
+}
+
+// With searchNested (on by default), typing "light" finds the command
+// inside the sub-palette directly — shown with a breadcrumb, "Change
+// Theme › Light" — no need to open "Change Theme" first.
+```
+
+#### Async search against any external source
+
+A group's `onSearch` can hit any API — docs, a database, search — debounced 200ms, merged with the synchronous results, and re-sorted by relevance.
+
+```ts
+import { useRegisterGroup } from '@macrulez/vue-command-palette'
+
+useRegisterGroup({
+  id: 'docs-search',
+  label: 'Documentation',
+  commands: [],
+  onSearch: async (query) => {
+    const results = await searchDocs(query)
+    return results.slice(0, 5).map((doc) => ({
+      id: `doc-${doc.slug}`,
+      label: doc.title,
+      description: doc.excerpt,
+      icon: '📄',
+      perform: () => window.open(doc.url, '_blank'),
+    }))
+  },
+})
+
+// Debounced 200ms, merged with the synchronous results and re-sorted by
+// score — already-shown results stay visible while the request is in flight.
+```
+
 ---
 
 ## Documentation & links
