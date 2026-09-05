@@ -66,6 +66,7 @@
 }
 
 .vcp-overlay {
+  line-height: normal;
   position: fixed;
   inset: 0;
   background: var(--vcp-overlay-bg);

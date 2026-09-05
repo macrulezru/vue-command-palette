@@ -1,6 +1,6 @@
 {
   "name": "@macrulez/vue-command-palette",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "Headless Command+K palette for Vue 3 with fuzzy search, grouped and nested commands, keyboard navigation and async search.",
   "author": "macrulez <macrulezru@gmail.com> (https://macrulez.ru/en)",
   "homepage": "https://npm.vuecraft.ru/en/packages/vue-command-palette/",
