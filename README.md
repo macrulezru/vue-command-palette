@@ -35,6 +35,17 @@ Command+K palette for Vue 3. Fuzzy search with match highlighting, grouped comma
 
 ---
 
+## When you'd reach for this
+
+Cmd+K has become an expected pattern in serious tools — vue-command-palette gives you a ready, fully customisable implementation instead of building search, keyboard navigation, and match highlighting from scratch.
+
+- **Actions are scattered across the interface** — Settings live in one corner, export in another, theme switching in a third — a command palette pulls all of it into one place, reachable from the keyboard without hunting through menus.
+- **A command needs clarification before it runs** — "Assign to user" can't just execute — it needs to find a person first; a nested page with its own async search handles that without a separate modal.
+- **A destructive command sits next to ordinary ones** — "Delete project" shouldn't be one click away like "Open settings" — a built-in confirm step guards against a stray click.
+- **The same commands come up every day** — Instead of retyping them each time, recent and pinned commands rise to the top on an empty query, and the ones you use most often climb even higher over time.
+
+---
+
 ## Installation
 
 | Environment | Minimum version                                   |
