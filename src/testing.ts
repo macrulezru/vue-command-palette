@@ -56,14 +56,32 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
   const queryHistory = ref<string[]>([])
 
   const ctx: PaletteContext = {
-    store, keyboard,
-    isOpen, query, activeIndex, history, recentIds, loadingCommandId, results,
+    store,
+    keyboard,
+    isOpen,
+    query,
+    activeIndex,
+    history,
+    recentIds,
+    loadingCommandId,
+    results,
     currentResults,
     executeRequest,
     colorTheme,
-    persistRecent, maxRecent, maxRecentPerGroup, localStorageKey,
-    frecency, usage, pinnedIds, queryHistory, showDisabled, globalSearch,
-    onOpen, onClose, onError, onHighlight,
+    persistRecent,
+    maxRecent,
+    maxRecentPerGroup,
+    localStorageKey,
+    frecency,
+    usage,
+    pinnedIds,
+    queryHistory,
+    showDisabled,
+    globalSearch,
+    onOpen,
+    onClose,
+    onError,
+    onHighlight,
   }
 
   const registry = new Map<string, PaletteContext>([['default', ctx]])
@@ -74,6 +92,7 @@ export function createPaletteContext(options: PaletteTestOptions = {}) {
     isOpen,
     query,
     activeIndex,
+    registry,
     provide: {
       [PALETTE_INJECT_KEY as unknown as string]: ctx,
       [PALETTE_REGISTRY_KEY as unknown as string]: registry,
@@ -98,11 +117,18 @@ export const PaletteProvider = defineComponent({
     groups: { type: Array as () => CommandGroup[], default: () => [] },
   },
   setup(props, { slots }) {
-    const { ctx } = createPaletteContext({
+    const { ctx, registry } = createPaletteContext({
       commands: props.commands,
       groups: props.groups,
     })
     vueProvide(PALETTE_INJECT_KEY, ctx)
+    // Named-instance lookups (useCommandPalette('name')) resolve through
+    // PALETTE_REGISTRY_KEY, not PALETTE_INJECT_KEY — createPaletteContext()
+    // already builds this registry (used by its own `provide` return value),
+    // but this component used to only provide the singleton key, so
+    // useCommandPalette('name') would fail under it even though
+    // createPaletteContext() itself works fine.
+    vueProvide(PALETTE_REGISTRY_KEY, registry)
     return () => slots.default?.()
   },
 })

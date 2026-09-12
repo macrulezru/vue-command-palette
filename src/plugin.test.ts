@@ -42,6 +42,21 @@ describe('VCommandPalettePlugin', () => {
     expect(ctx.isOpen.value).toBe(true)
   })
 
+  it('closing via the global hotkey clears history, same as close()', () => {
+    // Regression: the hotkey handler used to be a separate, hand-rolled
+    // open/close reimplementation that forgot to clear `history` on close —
+    // unlike close() itself. It now delegates to the same toggleOn()/
+    // closeOn() used everywhere else.
+    app = createApp({ render: () => null })
+    app.use(VCommandPalettePlugin, { hotkey: ['$mod', 'k'] })
+    const ctx = app.runWithContext(() => resolvePaletteContext())
+    ctx.isOpen.value = true
+    ctx.history.value.push({ paletteId: 'nested', query: 'q', activeIndex: 1 })
+    fireKey('k', { metaKey: true }) // toggles closed
+    expect(ctx.isOpen.value).toBe(false)
+    expect(ctx.history.value).toEqual([])
+  })
+
   describe('bindShortcuts', () => {
     it('runs a command when its shortcut is pressed', async () => {
       app = createApp({ render: () => null })
@@ -70,11 +85,47 @@ describe('VCommandPalettePlugin', () => {
       app.use(VCommandPalettePlugin, { bindShortcuts: true })
       const ctx = app.runWithContext(() => resolvePaletteContext())
       const perform = vi.fn()
-      const cleanup = ctx.store.registerCommands([cmd('save', 'Save', { shortcut: ['$mod', 's'], perform })])
+      const cleanup = ctx.store.registerCommands([
+        cmd('save', 'Save', { shortcut: ['$mod', 's'], perform }),
+      ])
       await nextTick()
       cleanup()
       await nextTick()
       fireKey('s', { metaKey: true })
+      expect(perform).not.toHaveBeenCalled()
+    })
+
+    it('also binds a shortcut declared on a nested subCommand, not just top-level commands', async () => {
+      app = createApp({ render: () => null })
+      app.use(VCommandPalettePlugin, { bindShortcuts: true })
+      const ctx = app.runWithContext(() => resolvePaletteContext())
+      const perform = vi.fn()
+      ctx.store.registerCommands([
+        cmd('parent', 'Parent', {
+          subCommands: [cmd('child', 'Child', { shortcut: ['$mod', 'shift', 'c'], perform })],
+        }),
+      ])
+      await nextTick()
+      fireKey('c', { metaKey: true, shiftKey: true })
+      expect(perform).toHaveBeenCalledOnce()
+    })
+
+    it('opens (does not perform) a shortcut-triggered page-only command with no subCommands, when no palette is mounted', async () => {
+      app = createApp({ render: () => null })
+      app.use(VCommandPalettePlugin, { bindShortcuts: true })
+      const ctx = app.runWithContext(() => resolvePaletteContext())
+      const perform = vi.fn()
+      ctx.store.registerCommands([
+        cmd('search-page', 'Search', {
+          shortcut: ['$mod', 'shift', 'f'],
+          page: {},
+          perform,
+        }),
+      ])
+      await nextTick()
+      expect(ctx.isOpen.value).toBe(false)
+      fireKey('f', { metaKey: true, shiftKey: true })
+      expect(ctx.isOpen.value).toBe(true)
       expect(perform).not.toHaveBeenCalled()
     })
   })
@@ -89,7 +140,8 @@ describe('VCommandPalettePlugin', () => {
       const sidebar = app.runWithContext(() => resolvePaletteContext('sidebar'))
       expect(def).not.toBe(sidebar)
 
-      const provides = (app as unknown as { _context: { provides: Record<symbol, unknown> } })._context.provides
+      const provides = (app as unknown as { _context: { provides: Record<symbol, unknown> } })
+        ._context.provides
       const registry = provides[PALETTE_REGISTRY_KEY] as Map<string, unknown>
       expect(registry.size).toBe(2)
     })
@@ -98,7 +150,8 @@ describe('VCommandPalettePlugin', () => {
       app = createApp({ render: () => null })
       app.use(VCommandPalettePlugin)
       app.use(VCommandPalettePlugin, { name: 'sidebar' })
-      const provides = (app as unknown as { _context: { provides: Record<symbol, unknown> } })._context.provides
+      const provides = (app as unknown as { _context: { provides: Record<symbol, unknown> } })
+        ._context.provides
       const singleton = provides[PALETTE_INJECT_KEY]
       const def = app.runWithContext(() => resolvePaletteContext())
       expect(singleton).toBe(def)
@@ -107,7 +160,9 @@ describe('VCommandPalettePlugin', () => {
     it('throws for an unknown instance name', () => {
       app = createApp({ render: () => null })
       app.use(VCommandPalettePlugin)
-      expect(() => app.runWithContext(() => resolvePaletteContext('nope'))).toThrow(/No palette instance named/)
+      expect(() => app.runWithContext(() => resolvePaletteContext('nope'))).toThrow(
+        /No palette instance named/,
+      )
     })
   })
 })

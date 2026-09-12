@@ -1,6 +1,7 @@
 import { computed, inject, ref, watch, type App } from 'vue'
 import { createCommandStore } from './core/CommandStore'
 import { createKeyboardManager } from './core/KeyboardManager'
+import { executeCommandOn, toggleOn } from './core/useCommandPalette'
 import { PALETTE_INJECT_KEY, PALETTE_REGISTRY_KEY } from './types'
 import type { Command, CommandUsage, PaletteOptions, SearchResult } from './types'
 import type { PaletteContext } from './core/useCommandPalette'
@@ -117,45 +118,48 @@ export function installPalette(app: App, options: PaletteOptions = {}) {
     // Register into the named-instance registry (get-or-create), so multiple
     // independent palettes can coexist on one app.
     const registry =
-      app.runWithContext(() => inject<Map<string, PaletteContext> | null>(PALETTE_REGISTRY_KEY, null)) ??
-      new Map<string, PaletteContext>()
+      app.runWithContext(() =>
+        inject<Map<string, PaletteContext> | null>(PALETTE_REGISTRY_KEY, null),
+      ) ?? new Map<string, PaletteContext>()
     registry.set(name, ctx)
     app.provide(PALETTE_REGISTRY_KEY, registry)
 
     // The default instance (or the first installed) also occupies the singleton
     // key, so `useCommandPalette()` / `inject(PALETTE_INJECT_KEY)` keep working.
-    const existingDefault = app.runWithContext(() => inject<PaletteContext | null>(PALETTE_INJECT_KEY, null))
+    const existingDefault = app.runWithContext(() =>
+      inject<PaletteContext | null>(PALETTE_INJECT_KEY, null),
+    )
     if (name === 'default' || !existingDefault) {
       app.provide(PALETTE_INJECT_KEY, ctx)
     }
 
-    keyboard.registerShortcut(hotkey, () => {
-      isOpen.value = !isOpen.value
-      if (isOpen.value) {
-        query.value = ''
-        activeIndex.value = 0
-        onOpen?.()
-      } else {
-        onClose?.()
-      }
-    })
+    keyboard.registerShortcut(hotkey, () => toggleOn(ctx))
 
     keyboard.start()
 
-    // Auto-register command shortcuts as real global hotkeys.
+    // Auto-register command shortcuts as real global hotkeys — including
+    // ones nested under a top-level command's `subCommands`, not just
+    // top-level commands themselves.
     if (bindShortcuts) {
-      // Minimal execution used only when no CommandPalette is mounted.
+      // Minimal execution used only when no CommandPalette is mounted —
+      // executeCommandOn() is the exact same logic the mounted UI itself
+      // uses (open on subCommands/page, confirm-gate, recent/frecency
+      // tracking, perform()), so this fallback can't silently drift from it.
       async function runFallback(cmd: Command) {
-        if (cmd.disabled || (cmd.enabled && !cmd.enabled())) return
-        if (cmd.subCommands?.length) { isOpen.value = true; return }
-        loadingCommandId.value = cmd.id
-        try {
-          await cmd.perform()
-        } catch (err) {
-          if (onError) onError(err, cmd)
-          else console.error('[@macrulez/vue-command-palette] Command error:', err)
-        } finally {
-          loadingCommandId.value = null
+        const handler = executeRequest.value
+        if (handler) handler(cmd)
+        else await executeCommandOn(ctx, cmd)
+      }
+
+      // Flattens every command AND every nested subCommand (recursively —
+      // subCommands can themselves have subCommands) into one id->Command
+      // map, so a shortcut declared on a nested command gets bound too.
+      // Top-level-only traversal used to silently skip every subCommand
+      // shortcut entirely.
+      function flattenShortcuttable(cmds: Command[], out: Map<string, Command>): void {
+        for (const cmd of cmds) {
+          if (cmd.shortcut?.length) out.set(cmd.id, cmd)
+          if (cmd.subCommands?.length) flattenShortcuttable(cmd.subCommands, out)
         }
       }
 
@@ -163,18 +167,22 @@ export function installPalette(app: App, options: PaletteOptions = {}) {
       watch(
         () => Array.from(store.state.commands.values()),
         (cmds) => {
-          const ids = new Set(cmds.map(c => c.id))
+          const shortcuttable = new Map<string, Command>()
+          flattenShortcuttable(cmds, shortcuttable)
+
           for (const [id, unregister] of bound) {
-            if (!ids.has(id)) { unregister(); bound.delete(id) }
+            if (!shortcuttable.has(id)) {
+              unregister()
+              bound.delete(id)
+            }
           }
-          for (const cmd of cmds) {
-            if (cmd.shortcut?.length && !bound.has(cmd.id)) {
-              const unregister = keyboard.registerShortcut(cmd.shortcut, () => {
-                const handler = executeRequest.value
-                if (handler) handler(cmd)
-                else void runFallback(cmd)
-              })
-              bound.set(cmd.id, unregister)
+          for (const [id, cmd] of shortcuttable) {
+            if (!bound.has(id)) {
+              const unregister = keyboard.registerShortcut(
+                cmd.shortcut!,
+                () => void runFallback(cmd),
+              )
+              bound.set(id, unregister)
             }
           }
         },

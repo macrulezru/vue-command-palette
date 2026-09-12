@@ -27,7 +27,10 @@ async function open(ctx: ReturnType<typeof createPaletteContext>['ctx']) {
 
 describe('CommandPalette', () => {
   beforeEach(() => vi.stubGlobal('localStorage', undefined))
-  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks() })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
 
   it('renders the dialog only when open', async () => {
     const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Alpha')] })
@@ -46,7 +49,9 @@ describe('CommandPalette', () => {
   })
 
   it('ArrowDown / ArrowUp move the active item', async () => {
-    const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Alpha'), cmd('b', 'Beta'), cmd('c', 'Gamma')] })
+    const { wrapper, ctx } = mountPalette({
+      commands: [cmd('a', 'Alpha'), cmd('b', 'Beta'), cmd('c', 'Gamma')],
+    })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('a') // matches all (fuzzy)
     const dialog = wrapper.find('.vcp-dialog')
@@ -115,19 +120,19 @@ describe('CommandPalette', () => {
     await wrapper.find('input.vcp-input').setValue('top level')
     await wrapper.find('.vcp-item').trigger('click') // → into Top
     await nextTick()
-    expect(ctx.history.value.map(h => h.paletteId)).toEqual(['top'])
+    expect(ctx.history.value.map((h) => h.paletteId)).toEqual(['top'])
     expect(wrapper.text()).toContain('Mid Level')
 
     await wrapper.find('.vcp-item').trigger('click') // → into Mid (2nd level)
     await nextTick()
-    expect(ctx.history.value.map(h => h.paletteId)).toEqual(['top', 'mid'])
+    expect(ctx.history.value.map((h) => h.paletteId)).toEqual(['top', 'mid'])
     // before the fix this was empty (resolution via getAllCommands missed nested ids)
     expect(wrapper.text()).toContain('Leaf Item')
 
     // Backspace returns to the parent level
     await wrapper.find('.vcp-dialog').trigger('keydown', { key: 'Backspace' })
     await nextTick()
-    expect(ctx.history.value.map(h => h.paletteId)).toEqual(['top'])
+    expect(ctx.history.value.map((h) => h.paletteId)).toEqual(['top'])
     expect(wrapper.text()).toContain('Mid Level')
   })
 
@@ -147,10 +152,14 @@ describe('CommandPalette', () => {
   it('merges async group results into the list', async () => {
     vi.useFakeTimers()
     const { wrapper, ctx } = mountPalette({
-      groups: [{
-        id: 'remote', label: 'Remote', commands: [],
-        onSearch: async (q) => [cmd(`r-${q}`, `Result ${q}`)],
-      }],
+      groups: [
+        {
+          id: 'remote',
+          label: 'Remote',
+          commands: [],
+          onSearch: async (q) => [cmd(`r-${q}`, `Result ${q}`)],
+        },
+      ],
     })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('x')
@@ -165,10 +174,17 @@ describe('CommandPalette', () => {
     let resolveSearch: (cmds: Command[]) => void = () => {}
     const { wrapper, ctx } = mountPalette({
       commands: [cmd('alpha', 'Alpha')], // sync match shown immediately
-      groups: [{
-        id: 'remote', label: 'Remote', commands: [],
-        onSearch: () => new Promise<Command[]>((res) => { resolveSearch = res }),
-      }],
+      groups: [
+        {
+          id: 'remote',
+          label: 'Remote',
+          commands: [],
+          onSearch: () =>
+            new Promise<Command[]>((res) => {
+              resolveSearch = res
+            }),
+        },
+      ],
     })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('alpha')
@@ -184,6 +200,56 @@ describe('CommandPalette', () => {
     vi.useRealTimers()
     expect(wrapper.find('.vcp-input-spinner').exists()).toBe(false)
     expect(wrapper.text()).toContain('Alpha')
+  })
+
+  it('isLoading stays true until every concurrent async pipeline finishes, not just the first to resolve', async () => {
+    // Regression: isLoading used to be one shared boolean across the
+    // group/global, page, and mode async pipelines — whichever finished
+    // first cleared the spinner even while another was still in flight.
+    // Both pipelines are manually gated here (rather than letting one
+    // auto-resolve) so the global one's "finally" is guaranteed to run,
+    // and be observed, strictly *before* the page one settles — with a
+    // single shared boolean that ordering reliably reproduces the bug;
+    // relying on incidental timing would not.
+    vi.useFakeTimers()
+    let resolvePageSearch: (cmds: Command[]) => void = () => {}
+    let resolveGlobalSearch: (cmds: Command[]) => void = () => {}
+    const pageCmd = cmd('search-users', 'Search Users', {
+      page: {
+        onSearch: () =>
+          new Promise<Command[]>((res) => {
+            resolvePageSearch = res
+          }),
+      },
+    })
+    const { wrapper, ctx } = mountPalette({
+      commands: [pageCmd],
+      onSearch: () =>
+        new Promise<Command[]>((res) => {
+          resolveGlobalSearch = res
+        }),
+    })
+    await open(ctx)
+    await wrapper.find('input.vcp-input').setValue('search users')
+    await wrapper.find('.vcp-item').trigger('click')
+    await nextTick()
+    await wrapper.find('input.vcp-input').setValue('bob')
+
+    // Debounce fires for both pipelines; both are now in flight.
+    await vi.advanceTimersByTimeAsync(250)
+    vi.useRealTimers()
+    expect(wrapper.find('.vcp-input-spinner').exists()).toBe(true)
+
+    // The global pipeline finishes first — its own "finally" runs, but the
+    // page pipeline is still pending, so the spinner must stay visible.
+    resolveGlobalSearch([cmd('g-bob', 'Global bob')])
+    await flushPromises()
+    expect(wrapper.find('.vcp-input-spinner').exists()).toBe(true)
+
+    // Now the page pipeline finishes too — only then should it clear.
+    resolvePageSearch([cmd('u-bob', 'User bob')])
+    await flushPromises()
+    expect(wrapper.find('.vcp-input-spinner').exists()).toBe(false)
   })
 
   it('respects the labels prop (recent header)', async () => {
@@ -235,7 +301,10 @@ describe('CommandPalette', () => {
 
   it('calls onHighlight when the active command changes', async () => {
     const onHighlight = vi.fn()
-    const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Alpha'), cmd('b', 'Alfa')], onHighlight })
+    const { wrapper, ctx } = mountPalette({
+      commands: [cmd('a', 'Alpha'), cmd('b', 'Alfa')],
+      onHighlight,
+    })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('al')
     expect(onHighlight).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }))
@@ -244,7 +313,9 @@ describe('CommandPalette', () => {
   })
 
   it('shows a match hint when a keyword matched but the label did not', async () => {
-    const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Settings', { keywords: ['config'] })] })
+    const { wrapper, ctx } = mountPalette({
+      commands: [cmd('a', 'Settings', { keywords: ['config'] })],
+    })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('config')
     const hint = wrapper.find('.vcp-item__match-hint')
@@ -263,15 +334,55 @@ describe('CommandPalette', () => {
     expect(mark.text().toLowerCase()).toBe('op')
   })
 
+  it('highlights a diacritic-insensitive match in the description, like the real fuzzy scorer does', async () => {
+    // Regression: description highlighting used to be a separate, plain
+    // .indexOf() implementation that missed a match like "cafe" against a
+    // description containing "café", even though the underlying
+    // fuzzySearch() match that put this command in the results (via
+    // FuzzySearch.ts's diacritic-aware scorer) had already accounted for it.
+    const { wrapper, ctx } = mountPalette({
+      commands: [cmd('a', 'Order', { description: 'Book a table at the café' })],
+    })
+    await open(ctx)
+    await wrapper.find('input.vcp-input').setValue('cafe')
+    const mark = wrapper.find('.vcp-item__description mark.vcp-match')
+    expect(mark.exists()).toBe(true)
+    expect(mark.text()).toBe('café')
+  })
+
   it('shows the match hint even when the command has a description (alias/keyword match)', async () => {
     const { wrapper, ctx } = mountPalette({
-      commands: [cmd('a', 'Go to Settings', { description: 'Account preferences', aliases: ['Options'] })],
+      commands: [
+        cmd('a', 'Go to Settings', { description: 'Account preferences', aliases: ['Options'] }),
+      ],
     })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('op') // matches alias "Options", not the label
     const item = wrapper.find('.vcp-item')
     expect(item.find('.vcp-item__match-hint').text()).toContain('Options')
     expect(item.find('.vcp-item__description').exists()).toBe(true) // description still shown
+  })
+
+  it('a better-scoring async result replaces an already-merged sync result of the same id, instead of being dropped', async () => {
+    // Regression: merging used to be "first-registered wins" on id
+    // collision — a slower-arriving async result was silently dropped
+    // whenever a sync result for the same id already existed, even with a
+    // strictly better score.
+    vi.useFakeTimers()
+    const { wrapper, ctx } = mountPalette({
+      // Weak fuzzy match only (score well under the async pipeline's fixed
+      // 50) — matches via `keywords`, not the label, so it still shows up
+      // in the static/sync results.
+      commands: [cmd('x', 'Static Loser', { keywords: ['abcdef'] })],
+      onSearch: async () => [cmd('x', 'Async Winner')],
+    })
+    await open(ctx)
+    await wrapper.find('input.vcp-input').setValue('af')
+    await vi.advanceTimersByTimeAsync(250)
+    await flushPromises()
+    vi.useRealTimers()
+    expect(wrapper.text()).toContain('Async Winner')
+    expect(wrapper.text()).not.toContain('Static Loser')
   })
 
   it('merges plugin-level onSearch results', async () => {
@@ -292,7 +403,16 @@ describe('CommandPalette', () => {
     vi.useFakeTimers()
     const { wrapper, ctx } = mountPalette(
       { commands: [cmd('a', 'Alpha')] },
-      { modes: [{ prefix: '>', label: 'Run', placeholder: 'Run a command…', onSearch: (q: string) => [cmd(`r-${q}`, `Result ${q}`)] }] },
+      {
+        modes: [
+          {
+            prefix: '>',
+            label: 'Run',
+            placeholder: 'Run a command…',
+            onSearch: (q: string) => [cmd(`r-${q}`, `Result ${q}`)],
+          },
+        ],
+      },
     )
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('>build')
@@ -310,10 +430,13 @@ describe('CommandPalette', () => {
 
   it('reserves a chevron column on every row, with the glyph only for groups', async () => {
     const { wrapper, ctx } = mountPalette({
-      groups: [{
-        id: 'g', label: 'G',
-        commands: [cmd('a', 'Alpha'), cmd('grp', 'Group', { subCommands: [cmd('x', 'X')] })],
-      }],
+      groups: [
+        {
+          id: 'g',
+          label: 'G',
+          commands: [cmd('a', 'Alpha'), cmd('grp', 'Group', { subCommands: [cmd('x', 'X')] })],
+        },
+      ],
     })
     await open(ctx)
     const items = wrapper.findAll('.vcp-item')
@@ -321,8 +444,8 @@ describe('CommandPalette', () => {
     // every row reserves the chevron column…
     for (const it of items) expect(it.find('.vcp-item__chevron').exists()).toBe(true)
     // …but the glyph is only on the group
-    const group = items.find(i => i.text().includes('Group'))!
-    const plain = items.find(i => i.text().includes('Alpha'))!
+    const group = items.find((i) => i.text().includes('Group'))!
+    const plain = items.find((i) => i.text().includes('Alpha'))!
     expect(group.find('.vcp-item__chevron').text()).toBe('›')
     expect(plain.find('.vcp-item__chevron').text()).toBe('')
   })
@@ -400,7 +523,9 @@ describe('CommandPalette', () => {
   it('keeps focus inside the dialog in actions mode (so keys still reach the handler)', async () => {
     // The input is removed in actions mode; without moving focus, key events would
     // hit <body> and never reach the dialog's keydown handler.
-    const helpers = createPaletteContext({ commands: [cmd('a', 'Alpha', { actions: [{ id: 'x', label: 'X', perform: () => {} }] })] })
+    const helpers = createPaletteContext({
+      commands: [cmd('a', 'Alpha', { actions: [{ id: 'x', label: 'X', perform: () => {} }] })],
+    })
     const wrapper = mount(CommandPalette, {
       attachTo: document.body,
       global: { provide: helpers.provide, stubs: { teleport: true, transition: true } },
@@ -415,7 +540,10 @@ describe('CommandPalette', () => {
   })
 
   it('multi-select: Enter toggles, $mod+Enter submits the selection', async () => {
-    const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Alpha'), cmd('b', 'Alfa')] }, { selectable: true })
+    const { wrapper, ctx } = mountPalette(
+      { commands: [cmd('a', 'Alpha'), cmd('b', 'Alfa')] },
+      { selectable: true },
+    )
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('al')
     await wrapper.find('.vcp-dialog').trigger('keydown', { key: 'Enter' }) // toggle active (Alpha)
@@ -423,7 +551,7 @@ describe('CommandPalette', () => {
     await wrapper.find('.vcp-dialog').trigger('keydown', { key: 'Enter', metaKey: true }) // submit
     const events = wrapper.emitted('submit-selection')
     expect(events).toBeTruthy()
-    expect((events![0][0] as Array<{ id: string }>).map(c => c.id)).toEqual(['a'])
+    expect((events![0][0] as Array<{ id: string }>).map((c) => c.id)).toEqual(['a'])
     expect(ctx.isOpen.value).toBe(false)
   })
 
@@ -453,17 +581,20 @@ describe('CommandPalette', () => {
 
   it('ranks name matches above description/keyword matches', async () => {
     const { wrapper, ctx } = mountPalette({
-      groups: [{
-        id: 'g', label: 'G',
-        commands: [
-          cmd('bykw', 'Team', { keywords: ['people'] }),       // matches "ope" only via keyword
-          cmd('byname', 'Open File'),                           // matches "ope" in the name
-        ],
-      }],
+      groups: [
+        {
+          id: 'g',
+          label: 'G',
+          commands: [
+            cmd('bykw', 'Team', { keywords: ['people'] }), // matches "ope" only via keyword
+            cmd('byname', 'Open File'), // matches "ope" in the name
+          ],
+        },
+      ],
     })
     await open(ctx)
     await wrapper.find('input.vcp-input').setValue('ope')
-    const ids = wrapper.findAll('.vcp-item').map(i => i.attributes('id'))
+    const ids = wrapper.findAll('.vcp-item').map((i) => i.attributes('id'))
     // name match first, keyword match after
     expect(ids).toEqual(['vcp-item-byname', 'vcp-item-bykw'])
   })
@@ -495,7 +626,10 @@ describe('CommandPalette', () => {
     const helpers = createPaletteContext({ commands: [cmd('a', 'Alpha')] })
     const wrapper = mount(CommandPalette, {
       props: { preview: true },
-      slots: { preview: (p: { command: Command | null }) => h('div', { class: 'pv' }, `PV:${p.command?.label ?? ''}`) },
+      slots: {
+        preview: (p: { command: Command | null }) =>
+          h('div', { class: 'pv' }, `PV:${p.command?.label ?? ''}`),
+      },
       global: { provide: helpers.provide, stubs: { teleport: true, transition: true } },
     })
     helpers.ctx.isOpen.value = true
@@ -519,7 +653,10 @@ describe('CommandPalette', () => {
   })
 
   it('toggles the preview pane via the toggle button and hotkey', async () => {
-    const { wrapper, ctx } = mountPalette({ commands: [cmd('a', 'Alpha', { info: 'x' })] }, { preview: true })
+    const { wrapper, ctx } = mountPalette(
+      { commands: [cmd('a', 'Alpha', { info: 'x' })] },
+      { preview: true },
+    )
     await open(ctx)
     // pane stays mounted; collapse is driven by a class (so width can animate)
     expect(wrapper.find('.vcp-preview').classes()).not.toContain('vcp-preview--collapsed')
