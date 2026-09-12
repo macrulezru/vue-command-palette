@@ -54,6 +54,127 @@ function saveRecent(ids: string[], key: string) {
   }
 }
 
+// ─── ctx-based core operations ─────────────────────────────────────────────
+// Free functions taking a PaletteContext explicitly, instead of closing over
+// a composable's local bindings — so the exact same open/close/execute logic
+// can run both from useCommandPalette() (inside a mounted component, via
+// inject()) and from plugin.ts's `bindShortcuts` fallback (at plugin-install
+// time, no component/inject context available). Two independent
+// reimplementations of this logic used to drift apart (e.g. the fallback
+// hotkey handler not clearing `history` on close the way close() does, or
+// not opening a `page`-only command the way executeCommand() does).
+
+export function openOn(ctx: PaletteContext, paletteId?: string): void {
+  if (paletteId && ctx.isOpen.value) {
+    ctx.history.value.push({
+      paletteId,
+      query: ctx.query.value,
+      activeIndex: ctx.activeIndex.value,
+    })
+    ctx.query.value = ''
+    ctx.activeIndex.value = 0
+  } else {
+    ctx.isOpen.value = true
+    ctx.query.value = ''
+    ctx.activeIndex.value = 0
+    ctx.onOpen?.()
+  }
+}
+
+export function closeOn(ctx: PaletteContext): void {
+  ctx.isOpen.value = false
+  ctx.query.value = ''
+  ctx.activeIndex.value = 0
+  ctx.history.value = []
+  ctx.onClose?.()
+}
+
+export function toggleOn(ctx: PaletteContext): void {
+  if (ctx.isOpen.value) closeOn(ctx)
+  else openOn(ctx)
+}
+
+export function addRecentOn(ctx: PaletteContext, id: string): void {
+  const ids = ctx.recentIds.value.filter((i) => i !== id)
+  ids.unshift(id)
+  ctx.recentIds.value = ids.slice(0, ctx.maxRecent)
+  if (ctx.persistRecent) saveRecent(ctx.recentIds.value, ctx.localStorageKey)
+}
+
+function recordQueryOn(ctx: PaletteContext, q: string): void {
+  const trimmed = q.trim()
+  if (!trimmed) return
+  ctx.queryHistory.value = [trimmed, ...ctx.queryHistory.value.filter((x) => x !== trimmed)].slice(
+    0,
+    25,
+  )
+}
+
+function recordUsageOn(ctx: PaletteContext, id: string): void {
+  if (!ctx.frecency) return
+  const prev = ctx.usage.value[id]
+  ctx.usage.value = {
+    ...ctx.usage.value,
+    [id]: { count: (prev?.count ?? 0) + 1, lastUsed: Date.now() },
+  }
+  if (ctx.persistRecent && typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(ctx.localStorageKey + ':frecency', JSON.stringify(ctx.usage.value))
+    } catch {
+      // ignore quota / availability errors
+    }
+  }
+}
+
+/**
+ * Opens `cmd` (subCommands/page) or runs it: confirms first if `cmd.confirm`
+ * is set and no CommandPalette UI is mounted (see `executeRequest`'s doc
+ * comment — a mounted UI shows its own confirm dialog before ever calling
+ * this, so this fallback path is skipped then), then records recent/frecency/
+ * query history and calls `perform()`. Shared by useCommandPalette()'s
+ * `executeCommand` and plugin.ts's `bindShortcuts` fallback, so both paths
+ * stay behaviorally identical instead of silently drifting apart.
+ */
+export async function executeCommandOn(ctx: PaletteContext, cmd: Command): Promise<void> {
+  if (cmd.disabled || (cmd.enabled && !cmd.enabled())) return
+
+  if (cmd.subCommands?.length || cmd.page) {
+    openOn(ctx, cmd.id)
+    return
+  }
+
+  if (cmd.confirm && !ctx.executeRequest.value) {
+    // No CommandPalette UI is mounted to show its own confirm dialog — fall
+    // back to the browser's native confirm() so an author's explicit safety
+    // gate on a shortcut-triggered command is never silently bypassed.
+    // Outside a browser (SSR, tests, no `window`) there's no way to ask at
+    // all — refuse to execute rather than silently skip the confirmation.
+    if (typeof window === 'undefined' || typeof window.confirm !== 'function') {
+      console.warn(
+        `[@macrulez/vue-command-palette] Command "${cmd.id}" requires confirmation, but no ` +
+          'CommandPalette UI is mounted and window.confirm() is unavailable — refusing to run it.',
+      )
+      return
+    }
+    if (!window.confirm(cmd.confirm)) return
+  }
+
+  addRecentOn(ctx, cmd.id)
+  recordUsageOn(ctx, cmd.id)
+  recordQueryOn(ctx, ctx.query.value)
+  closeOn(ctx)
+
+  ctx.loadingCommandId.value = cmd.id
+  try {
+    await cmd.perform()
+  } catch (err) {
+    if (ctx.onError) ctx.onError(err, cmd)
+    else console.error('[@macrulez/vue-command-palette] Command error:', err)
+  } finally {
+    ctx.loadingCommandId.value = null
+  }
+}
+
 /**
  * Resolves a palette context by instance name. Without a name it returns the
  * default/singleton instance; with a name it looks it up in the registry.
@@ -63,12 +184,17 @@ export function resolvePaletteContext(name?: string): PaletteContext {
     const registry = inject<Map<string, PaletteContext> | null>(PALETTE_REGISTRY_KEY, null)
     const ctx = registry?.get(name)
     if (!ctx) {
-      throw new Error(`[@macrulez/vue-command-palette] No palette instance named "${name}". Install it with app.use(VCommandPalettePlugin, { name: "${name}" }).`)
+      throw new Error(
+        `[@macrulez/vue-command-palette] No palette instance named "${name}". Install it with app.use(VCommandPalettePlugin, { name: "${name}" }).`,
+      )
     }
     return ctx
   }
   const ctx = inject<PaletteContext>(PALETTE_INJECT_KEY)
-  if (!ctx) throw new Error('[@macrulez/vue-command-palette] Plugin not installed. Use app.use(VCommandPalettePlugin).')
+  if (!ctx)
+    throw new Error(
+      '[@macrulez/vue-command-palette] Plugin not installed. Use app.use(VCommandPalettePlugin).',
+    )
   return ctx
 }
 
@@ -76,51 +202,46 @@ export function useCommandPalette(name?: string) {
   const ctx = resolvePaletteContext(name)
 
   const {
-    store, isOpen, query, activeIndex, history, recentIds,
-    loadingCommandId, results, currentResults, colorTheme, persistRecent, maxRecent, localStorageKey,
-    frecency, usage, pinnedIds, queryHistory,
-    onOpen: onOpenCb, onClose: onCloseCb, onError: onErrorCb,
+    store,
+    isOpen,
+    query,
+    activeIndex,
+    history,
+    recentIds,
+    loadingCommandId,
+    results,
+    currentResults,
+    colorTheme,
+    persistRecent,
+    localStorageKey,
+    pinnedIds,
+    queryHistory,
   } = ctx
 
   function open(paletteId?: string) {
-    if (paletteId && isOpen.value) {
-      history.value.push({ paletteId, query: query.value, activeIndex: activeIndex.value })
-      query.value = ''
-      activeIndex.value = 0
-    } else {
-      isOpen.value = true
-      query.value = ''
-      activeIndex.value = 0
-      onOpenCb?.()
-    }
+    openOn(ctx, paletteId)
   }
 
   function close() {
-    isOpen.value = false
-    query.value = ''
-    activeIndex.value = 0
-    history.value = []
-    onCloseCb?.()
+    closeOn(ctx)
   }
 
   function toggle() {
-    if (isOpen.value) close()
-    else open()
+    toggleOn(ctx)
   }
 
   function goBack() {
-    if (!history.value.length) { close(); return }
+    if (!history.value.length) {
+      close()
+      return
+    }
     const prev = history.value.pop()!
     query.value = prev.query
     activeIndex.value = prev.activeIndex
   }
 
   function addRecent(id: string) {
-    // Always track recent in memory; only persist to localStorage when enabled.
-    const ids = recentIds.value.filter(i => i !== id)
-    ids.unshift(id)
-    recentIds.value = ids.slice(0, maxRecent)
-    if (persistRecent) saveRecent(recentIds.value, localStorageKey)
+    addRecentOn(ctx, id)
   }
 
   function isPinned(id: string): boolean {
@@ -134,7 +255,7 @@ export function useCommandPalette(name?: string) {
   }
 
   function unpin(id: string) {
-    pinnedIds.value = pinnedIds.value.filter(i => i !== id)
+    pinnedIds.value = pinnedIds.value.filter((i) => i !== id)
     if (persistRecent) saveRecent(pinnedIds.value, localStorageKey + ':pinned')
   }
 
@@ -144,48 +265,11 @@ export function useCommandPalette(name?: string) {
   }
 
   function getPinnedCommands(): Command[] {
-    return pinnedIds.value
-      .map(id => store.findCommand(id))
-      .filter((c): c is Command => !!c)
-  }
-
-  function recordQuery(q: string) {
-    const trimmed = q.trim()
-    if (!trimmed) return
-    queryHistory.value = [trimmed, ...queryHistory.value.filter(x => x !== trimmed)].slice(0, 25)
-  }
-
-  function recordUsage(id: string) {
-    if (!frecency) return
-    const prev = usage.value[id]
-    usage.value = { ...usage.value, [id]: { count: (prev?.count ?? 0) + 1, lastUsed: Date.now() } }
-    if (persistRecent && typeof localStorage !== 'undefined') {
-      try { localStorage.setItem(localStorageKey + ':frecency', JSON.stringify(usage.value)) } catch { /* ignore */ }
-    }
+    return pinnedIds.value.map((id) => store.findCommand(id)).filter((c): c is Command => !!c)
   }
 
   async function executeCommand(cmd: Command): Promise<void> {
-    if (cmd.disabled || (cmd.enabled && !cmd.enabled())) return
-
-    if (cmd.subCommands?.length || cmd.page) {
-      open(cmd.id)
-      return
-    }
-
-    addRecent(cmd.id)
-    recordUsage(cmd.id)
-    recordQuery(query.value)
-    close()
-
-    loadingCommandId.value = cmd.id
-    try {
-      await cmd.perform()
-    } catch (err) {
-      if (onErrorCb) onErrorCb(err, cmd)
-      else console.error('[@macrulez/vue-command-palette] Command error:', err)
-    } finally {
-      loadingCommandId.value = null
-    }
+    await executeCommandOn(ctx, cmd)
   }
 
   async function executeActive(): Promise<void> {
@@ -195,9 +279,7 @@ export function useCommandPalette(name?: string) {
   }
 
   function getRecentCommands(): Command[] {
-    return recentIds.value
-      .map(id => store.findCommand(id))
-      .filter((c): c is Command => !!c)
+    return recentIds.value.map((id) => store.findCommand(id)).filter((c): c is Command => !!c)
   }
 
   function registerCommands<T = unknown>(commands: Command<T>[]): () => void {

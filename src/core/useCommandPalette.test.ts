@@ -16,11 +16,19 @@ function makeStorage(): Storage {
   const m = new Map<string, string>()
   return {
     getItem: (k) => (m.has(k) ? m.get(k)! : null),
-    setItem: (k, v) => { m.set(k, String(v)) },
-    removeItem: (k) => { m.delete(k) },
-    clear: () => { m.clear() },
+    setItem: (k, v) => {
+      m.set(k, String(v))
+    },
+    removeItem: (k) => {
+      m.delete(k)
+    },
+    clear: () => {
+      m.clear()
+    },
     key: (i) => [...m.keys()][i] ?? null,
-    get length() { return m.size },
+    get length() {
+      return m.size
+    },
   } as Storage
 }
 
@@ -108,14 +116,14 @@ describe('useCommandPalette', () => {
     const { palette } = setup({ commands: [cmd('a', 'Alpha')] })
     palette.addRecent('a')
     palette.addRecent('ghost')
-    expect(palette.getRecentCommands().map(c => c.id)).toEqual(['a'])
+    expect(palette.getRecentCommands().map((c) => c.id)).toEqual(['a'])
   })
 
   it('getRecentCommands resolves nested sub-commands (executed from a group)', () => {
     const parent = cmd('parent', 'Parent', { subCommands: [cmd('child', 'Child')] })
     const { palette } = setup({ commands: [parent] })
     palette.addRecent('child') // a leaf sub-command, not registered directly
-    expect(palette.getRecentCommands().map(c => c.id)).toEqual(['child'])
+    expect(palette.getRecentCommands().map((c) => c.id)).toEqual(['child'])
   })
 
   it('executeCommand runs perform, records recent and closes', async () => {
@@ -149,8 +157,44 @@ describe('useCommandPalette', () => {
     const onError = vi.fn()
     const err = new Error('boom')
     const { palette } = setup({ onError })
-    await palette.executeCommand(cmd('a', 'Alpha', { perform: () => { throw err } }))
+    await palette.executeCommand(
+      cmd('a', 'Alpha', {
+        perform: () => {
+          throw err
+        },
+      }),
+    )
     expect(onError).toHaveBeenCalledWith(err, expect.objectContaining({ id: 'a' }))
+  })
+
+  it('executeCommand asks window.confirm() before running a confirm-gated command with no CommandPalette UI mounted', async () => {
+    const perform = vi.fn()
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { palette } = setup()
+    await palette.executeCommand(cmd('a', 'Alpha', { perform, confirm: 'Are you sure?' }))
+    expect(confirmSpy).toHaveBeenCalledWith('Are you sure?')
+    expect(perform).toHaveBeenCalledOnce()
+  })
+
+  it('executeCommand does not run a confirm-gated command when window.confirm() is declined', async () => {
+    const perform = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const { palette } = setup()
+    await palette.executeCommand(cmd('a', 'Alpha', { perform, confirm: 'Are you sure?' }))
+    expect(perform).not.toHaveBeenCalled()
+  })
+
+  it('executeCommand skips the confirm prompt when a CommandPalette UI is mounted (executeRequest set)', async () => {
+    // The mounted UI already showed its own confirm dialog before ever
+    // calling executeCommand — a second, native window.confirm() here would
+    // be a redundant double-prompt.
+    const perform = vi.fn()
+    const confirmSpy = vi.spyOn(window, 'confirm')
+    const { palette, ctx } = setup()
+    ctx.executeRequest.value = () => {}
+    await palette.executeCommand(cmd('a', 'Alpha', { perform, confirm: 'Are you sure?' }))
+    expect(confirmSpy).not.toHaveBeenCalled()
+    expect(perform).toHaveBeenCalledOnce()
   })
 
   it('executeActive runs the command at activeIndex from currentResults', async () => {
@@ -186,7 +230,7 @@ describe('useCommandPalette', () => {
     const { palette } = setup({ commands: [cmd('a', 'Alpha')] })
     palette.pin('a')
     palette.pin('ghost')
-    expect(palette.getPinnedCommands().map(c => c.id)).toEqual(['a'])
+    expect(palette.getPinnedCommands().map((c) => c.id)).toEqual(['a'])
   })
 
   it('records the query into history on execute (most-recent-first, deduped)', async () => {
