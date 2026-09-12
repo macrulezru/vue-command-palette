@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-const { addComponentMock, addImportsMock, addPluginMock } = vi.hoisted(() => ({
+const { addComponentMock, addImportsMock, addPluginMock, addTemplateMock } = vi.hoisted(() => ({
   addComponentMock: vi.fn(),
   addImportsMock: vi.fn(),
   addPluginMock: vi.fn(),
+  addTemplateMock: vi.fn(),
 }))
 
 // Real @nuxt/kit needs a full Nuxt instance to call defineNuxtModule() —
@@ -14,10 +15,11 @@ vi.mock('@nuxt/kit', () => ({
   addPlugin: (...args: unknown[]) => addPluginMock(...args),
   addImports: (...args: unknown[]) => addImportsMock(...args),
   addComponent: (...args: unknown[]) => addComponentMock(...args),
+  addTemplate: (...args: unknown[]) => addTemplateMock(...args),
   createResolver: () => ({ resolve: (p: string) => p }),
 }))
 
-import moduleDef from './module'
+import moduleDef, { functionalOptionsTemplateFilename } from './module'
 
 interface FakeNuxt {
   options: {
@@ -39,6 +41,7 @@ describe('Nuxt module', () => {
     addComponentMock.mockClear()
     addImportsMock.mockClear()
     addPluginMock.mockClear()
+    addTemplateMock.mockClear()
   })
 
   it('registers every public component via addComponent, not zero', () => {
@@ -87,6 +90,40 @@ describe('Nuxt module', () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     runSetup({ hotkey: ['$mod', 'k'], maxRecent: 10 }, nuxt)
     expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
+  })
+
+  it('generates an empty functionalOptions template when no configFile is set', () => {
+    // Regression: function-valued options had no real way to reach a Nuxt
+    // consumer at all — the previous warning recommended a workaround
+    // (calling app.use(VCommandPalettePlugin, ...) a second time) that
+    // Vue's app.use() de-duplication silently no-ops, since the module's own
+    // runtime plugin already installs that exact same plugin object.
+    runSetup({}, fakeNuxt())
+    const call = addTemplateMock.mock.calls.find(
+      (c) => (c[0] as { filename: string }).filename === functionalOptionsTemplateFilename,
+    )
+    expect(call).toBeDefined()
+    const getContents = (call![0] as { getContents: () => string }).getContents
+    expect(getContents()).toBe('export const functionalOptions = {}')
+  })
+
+  it('generates a functionalOptions template importing configFile when set', () => {
+    runSetup({ configFile: '~/palette.config' }, fakeNuxt())
+    const call = addTemplateMock.mock.calls.find(
+      (c) => (c[0] as { filename: string }).filename === functionalOptionsTemplateFilename,
+    )
+    expect(call).toBeDefined()
+    const getContents = (call![0] as { getContents: () => string }).getContents
+    expect(getContents()).toBe(`export { default as functionalOptions } from "~/palette.config"`)
+  })
+
+  it('recommends configFile (not the broken app.use() workaround) in the warning', () => {
+    const nuxt = fakeNuxt()
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    runSetup({ onOpen: () => {} }, nuxt)
+    expect(warnSpy.mock.calls[0][0]).toMatch(/configFile/)
+    expect(warnSpy.mock.calls[0][0]).not.toMatch(/VCommandPalettePlugin/)
     warnSpy.mockRestore()
   })
 })

@@ -24,7 +24,7 @@ export default defineConfig({
       fileName: (format, entryName) => (format === 'es' ? `${entryName}.js` : `${entryName}.cjs`),
     },
     rollupOptions: {
-      external: ['vue', '@nuxt/kit', '#imports'],
+      external: ['vue', '@nuxt/kit', '#imports', '#build/vue-command-palette-functional-options.mjs'],
       output: {
         globals: { vue: 'Vue' },
         exports: 'named',
